@@ -19,6 +19,8 @@ Whisper is a responsive Telegram-inspired chat application with client-side mess
 Requires Node.js 22.13 or newer.
 
 ```bash
+nvm install 22
+nvm use
 npm install
 npm run dev
 ```
