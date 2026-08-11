@@ -1,13 +1,14 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { decryptMessage, encryptMessage, getDeviceId } from "./client-crypto";
 
 type Message = {
-  id: number;
+  id: number | string;
   text: string;
   time: string;
   mine?: boolean;
-  status?: "read" | "sent";
+  status?: "read" | "sent" | "failed";
   replyTo?: string;
 };
 
@@ -139,11 +140,75 @@ export function ChatApp() {
     [chats, query],
   );
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEncryptedMessages() {
+      try {
+        const response = await fetch(`/api/messages?conversationId=${encodeURIComponent(activeId)}`, {
+          headers: { "x-whisper-device-id": getDeviceId() },
+        });
+        if (!response.ok) return;
+        const payload = await response.json() as {
+          messages?: Array<{ id: string; ciphertext: string; iv: string; createdAt: string; mine: boolean }>;
+        };
+        const decrypted = await Promise.all((payload.messages ?? []).map(async (message) => ({
+          id: message.id,
+          text: await decryptMessage(activeId, message),
+          time: new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(message.createdAt)),
+          mine: message.mine,
+          status: message.mine ? "read" as const : undefined,
+        })));
+        if (cancelled || decrypted.length === 0) return;
+        setChats((current) => current.map((chat) => {
+          if (chat.id !== activeId) return chat;
+          const known = new Set(chat.messages.map((message) => message.id));
+          const restored = decrypted.filter((message) => !known.has(message.id));
+          return restored.length ? { ...chat, messages: [...chat.messages, ...restored] } : chat;
+        }));
+      } catch {
+        // The local encryption key can intentionally be absent on a new device.
+      }
+    }
+
+    void loadEncryptedMessages();
+    return () => { cancelled = true; };
+  }, [activeId]);
+
   function selectChat(id: string) {
     setActiveId(id);
     setMobileChatOpen(true);
     setShowInfo(false);
     setChats((current) => current.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)));
+  }
+
+  async function persistEncryptedMessage(chat: Chat, message: Message) {
+    try {
+      const encrypted = await encryptMessage(chat.id, message.text);
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-whisper-device-id": getDeviceId() },
+        body: JSON.stringify({
+          conversationId: chat.id,
+          conversationTitle: chat.name,
+          ...encrypted,
+        }),
+      });
+      if (!response.ok) throw new Error("Message storage failed");
+      const payload = await response.json() as { message: { id: string } };
+      setChats((current) => current.map((item) =>
+        item.id === chat.id
+          ? { ...item, messages: item.messages.map((entry) => entry.id === message.id ? { ...entry, id: payload.message.id, status: "read" } : entry) }
+          : item,
+      ));
+    } catch {
+      setChats((current) => current.map((item) =>
+        item.id === chat.id
+          ? { ...item, messages: item.messages.map((entry) => entry.id === message.id ? { ...entry, status: "failed" } : entry) }
+          : item,
+      ));
+      flash("Message could not be stored securely. Tap to retry.");
+    }
   }
 
   function sendMessage(event: FormEvent) {
@@ -152,7 +217,7 @@ export function ChatApp() {
     if (!text) return;
 
     const message: Message = {
-      id: Date.now(),
+      id: `local-${crypto.randomUUID()}`,
       text,
       time: formatTime(),
       mine: true,
@@ -168,15 +233,7 @@ export function ChatApp() {
     );
     setDraft("");
     setShowEmoji(false);
-    window.setTimeout(() => {
-      setChats((current) =>
-        current.map((chat) =>
-          chat.id === activeChat.id
-            ? { ...chat, messages: chat.messages.map((item) => (item.id === message.id ? { ...item, status: "read" } : item)) }
-            : chat,
-        ),
-      );
-    }, 700);
+    void persistEncryptedMessage(activeChat, message);
   }
 
   function flash(message: string) {
@@ -267,7 +324,7 @@ export function ChatApp() {
                   <p>{message.text}</p>
                   <span className="message-meta">
                     {message.time}
-                    {message.mine && <b aria-label={message.status === "read" ? "Read" : "Sent"}>{message.status === "read" ? "✓✓" : "✓"}</b>}
+                    {message.mine && <b className={message.status === "failed" ? "failed" : ""} aria-label={message.status === "read" ? "Read" : message.status === "failed" ? "Failed" : "Sent"}>{message.status === "read" ? "✓✓" : message.status === "failed" ? "!" : "✓"}</b>}
                   </span>
                 </div>
               </div>

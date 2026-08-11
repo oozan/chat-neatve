@@ -186,6 +186,7 @@ button { color: inherit; }
 .bubble p { margin: 0; color: #26332f; font-size: 13px; line-height: 1.47; white-space: pre-wrap; overflow-wrap: anywhere; }
 .message-meta { display: flex; justify-content: flex-end; gap: 4px; margin-top: 3px; color: #89938f; font-size: 9px; }
 .message-meta b { color: var(--green); letter-spacing: -2px; }
+.message-meta b.failed { color: #bc5145; letter-spacing: 0; }
 .reply-quote { margin: 0 0 7px; padding: 5px 8px; border-left: 3px solid var(--green); border-radius: 4px; background: rgba(15,124,102,.06); color: #59716a; font-size: 10px; }
 
 .composer-zone { position: relative; z-index: 4; padding: 12px 24px 10px; border-top: 1px solid rgba(38,59,52,.08); background: rgba(249,250,249,.96); }
