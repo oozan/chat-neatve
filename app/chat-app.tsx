@@ -1,17 +1,30 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from "react";
+import Image from "next/image";
 import { decryptMessage, encryptMessage, getDeviceId } from "./client-crypto";
 
 type Message = {
   id: number | string;
   text: string;
   gif?: string;
+  gifUrl?: string;
+  gifPreviewUrl?: string;
   time: string;
   mine?: boolean;
   status?: "read" | "sent" | "failed";
   replyTo?: string;
   reactions?: string[];
+};
+
+type OnlineGif = {
+  id: string;
+  label: string;
+  url: string;
+  previewUrl: string;
+  width: number;
+  height: number;
+  provider: "Tenor";
 };
 
 type Chat = {
@@ -145,6 +158,16 @@ const gifs = [
 ];
 
 function decodeStoredMessage(value: string) {
+  if (value.startsWith("[online-gif]")) {
+    try {
+      const data = JSON.parse(value.slice(12)) as { id: string; label: string; url: string; previewUrl: string };
+      if (data.id && data.label && data.url && data.previewUrl) {
+        return { text: data.label, gif: `tenor-${data.id}`, gifUrl: data.url, gifPreviewUrl: data.previewUrl };
+      }
+    } catch {
+      return { text: "GIF" };
+    }
+  }
   const match = value.match(/^\[gif:([a-z0-9-]+)]\s*(.*)$/i);
   return match ? { text: match[2], gif: match[1] } : { text: value };
 }
@@ -158,6 +181,8 @@ export function ChatApp() {
   const [pickerTab, setPickerTab] = useState<"emoji" | "gif">("emoji");
   const [emojiGroup, setEmojiGroup] = useState("Smileys");
   const [gifQuery, setGifQuery] = useState("");
+  const [onlineGifs, setOnlineGifs] = useState<OnlineGif[]>([]);
+  const [gifSearchState, setGifSearchState] = useState<"idle" | "loading" | "ready" | "unconfigured" | "error">("idle");
   const [reactionTarget, setReactionTarget] = useState<Message["id"] | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
@@ -168,6 +193,35 @@ export function ChatApp() {
     () => chats.filter((chat) => chat.name.toLowerCase().includes(query.toLowerCase())),
     [chats, query],
   );
+
+  useEffect(() => {
+    if (!showMediaPicker || pickerTab !== "gif") return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setGifSearchState("loading");
+      try {
+        const response = await fetch(`/api/gifs${gifQuery.trim() ? `?q=${encodeURIComponent(gifQuery.trim())}` : ""}`, { signal: controller.signal });
+        const payload = await response.json() as { configured?: boolean; results?: OnlineGif[] };
+        if (!payload.configured) {
+          setOnlineGifs([]);
+          setGifSearchState("unconfigured");
+          return;
+        }
+        if (!response.ok) throw new Error("GIF search failed");
+        setOnlineGifs(payload.results ?? []);
+        setGifSearchState("ready");
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          setOnlineGifs([]);
+          setGifSearchState("error");
+        }
+      }
+    }, gifQuery.trim() ? 350 : 0);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [gifQuery, pickerTab, showMediaPicker]);
 
   useEffect(() => {
     let cancelled = false;
@@ -216,7 +270,10 @@ export function ChatApp() {
 
   async function persistEncryptedMessage(chat: Chat, message: Message) {
     try {
-      const encrypted = await encryptMessage(chat.id, message.gif ? `[gif:${message.gif}] ${message.text}` : message.text);
+      const storedContent = message.gifUrl
+        ? `[online-gif]${JSON.stringify({ id: message.gif?.replace(/^tenor-/, ""), label: message.text, url: message.gifUrl, previewUrl: message.gifPreviewUrl ?? message.gifUrl })}`
+        : message.gif ? `[gif:${message.gif}] ${message.text}` : message.text;
+      const encrypted = await encryptMessage(chat.id, storedContent);
       const response = await fetch("/api/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "x-whisper-device-id": getDeviceId() },
@@ -273,6 +330,25 @@ export function ChatApp() {
       id: `local-${crypto.randomUUID()}`,
       text: gif.label,
       gif: gif.id,
+      time: formatTime(),
+      mine: true,
+      status: "sent",
+    };
+    setChats((current) => current.map((chat) => chat.id === activeChat.id
+      ? { ...chat, preview: `GIF · ${gif.label}`, time: message.time, messages: [...chat.messages, message] }
+      : chat));
+    setShowMediaPicker(false);
+    setGifQuery("");
+    void persistEncryptedMessage(activeChat, message);
+  }
+
+  function sendOnlineGif(gif: OnlineGif) {
+    const message: Message = {
+      id: `local-${crypto.randomUUID()}`,
+      text: gif.label,
+      gif: `tenor-${gif.id}`,
+      gifUrl: gif.url,
+      gifPreviewUrl: gif.previewUrl,
       time: formatTime(),
       mine: true,
       status: "sent",
@@ -380,7 +456,13 @@ export function ChatApp() {
                 {!message.mine && <span className={`mini-avatar avatar-${activeChat.color}`}>{activeChat.initials}</span>}
                 <div className="bubble">
                   {message.replyTo && <div className="reply-quote">{message.replyTo}</div>}
-                  {message.gif ? (() => {
+                  {message.gifUrl ? (
+                    <div className="online-gif-message">
+                      <Image src={message.gifUrl} alt={message.text} width={640} height={480} unoptimized />
+                      <span className="online-gif-label">{message.text}</span>
+                      <i>GIF · TENOR</i>
+                    </div>
+                  ) : message.gif ? (() => {
                     const gif = gifs.find((item) => item.id === message.gif) ?? gifs[0];
                     return <div className={`gif-message gif-${gif.id}`} style={{ "--gif-a": gif.colors[0], "--gif-b": gif.colors[1] } as CSSProperties}><span>{gif.emoji}</span><strong>{gif.label}</strong><i>GIF</i></div>;
                   })() : <p>{message.text}</p>}
@@ -417,7 +499,13 @@ export function ChatApp() {
                 </>
               ) : (
                 <>
-                  <div className="gif-search"><span>⌕</span><input value={gifQuery} onChange={(event) => setGifQuery(event.target.value)} placeholder="Search GIFs" aria-label="Search GIFs" /></div>
+                  <div className="gif-search"><span>⌕</span><input value={gifQuery} onChange={(event) => setGifQuery(event.target.value)} placeholder="Search Tenor and Whisper GIFs" aria-label="Search GIFs online" />{gifSearchState === "loading" && <i className="gif-search-spinner" aria-label="Searching" />}</div>
+                  <div className="gif-source-heading"><strong>{gifQuery.trim() ? "Online results" : "Trending online"}</strong><span>powered by Tenor</span></div>
+                  {gifSearchState === "unconfigured" && <div className="gif-online-note"><strong>Online search is ready to connect</strong><span>Add a Tenor API key to search the web. Your current Whisper GIFs remain below.</span></div>}
+                  {gifSearchState === "error" && <div className="gif-online-note error"><strong>Couldn’t reach online GIFs</strong><span>Showing the built-in collection instead.</span></div>}
+                  {gifSearchState === "ready" && onlineGifs.length === 0 && <div className="gif-online-note"><strong>No online matches</strong><span>Try another phrase or choose a Whisper GIF.</span></div>}
+                  {!!onlineGifs.length && <div className="online-gif-grid">{onlineGifs.map((gif) => <button key={gif.id} onClick={() => sendOnlineGif(gif)} className="online-gif-card" title={`Send ${gif.label}`}><Image src={gif.previewUrl} alt={gif.label} width={gif.width} height={gif.height} unoptimized /><span>{gif.label}</span><i>GIF</i></button>)}</div>}
+                  <div className="gif-source-heading built-in"><strong>Whisper GIFs</strong><span>always available</span></div>
                   <div className="gif-grid">{gifs.filter((gif) => gif.label.toLowerCase().includes(gifQuery.toLowerCase())).map((gif) => <button key={gif.id} onClick={() => sendGif(gif)} className={`gif-card gif-${gif.id}`} style={{ "--gif-a": gif.colors[0], "--gif-b": gif.colors[1] } as CSSProperties}><span>{gif.emoji}</span><strong>{gif.label}</strong><i>GIF</i></button>)}</div>
                 </>
               )}

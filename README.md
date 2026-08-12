@@ -27,6 +27,10 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+### Online GIF search
+
+Whisper keeps its built-in animated GIF collection available without any external service. To also search Tenor online, copy `.env.example` to `.env.local` and add a Tenor API key as `TENOR_API_KEY`. Configure the same secret in the deployed Sites environment to enable online search there.
+
 ## Quality checks
 
 ```bash

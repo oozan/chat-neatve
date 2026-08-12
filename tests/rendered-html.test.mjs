@@ -43,3 +43,16 @@ test("keeps plaintext out of the persistence boundary", async () => {
   assert.match(schema, /idx_messages_conversation_created_at/);
   assert.match(hosting, /"d1": "DB"/);
 });
+
+test("keeps online GIF provider credentials on the server", async () => {
+  const [route, client] = await Promise.all([
+    readFile(new URL("../app/api/gifs/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(route, /TENOR_API_KEY/);
+  assert.match(route, /contentfilter/);
+  assert.match(route, /tenor\.googleapis\.com/);
+  assert.match(client, /\/api\/gifs/);
+  assert.doesNotMatch(client, /TENOR_API_KEY|tenor\.googleapis\.com/);
+});
