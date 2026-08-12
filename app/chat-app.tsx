@@ -1,15 +1,17 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { decryptMessage, encryptMessage, getDeviceId } from "./client-crypto";
 
 type Message = {
   id: number | string;
   text: string;
+  gif?: string;
   time: string;
   mine?: boolean;
   status?: "read" | "sent" | "failed";
   replyTo?: string;
+  reactions?: string[];
 };
 
 type Chat = {
@@ -124,12 +126,39 @@ const initialChats: Chat[] = [
 const formatTime = () =>
   new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
 
+const emojiGroups = [
+  { name: "Smileys", icon: "☺", emojis: ["😀", "😃", "😄", "😁", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤩", "🥳", "🤗", "🤔", "🫡", "🥹", "😴", "😭", "😤", "🤯", "😱", "🙈", "🫠"] },
+  { name: "Gestures", icon: "✌", emojis: ["👋", "🤚", "🖐️", "✋", "👌", "🤌", "🤏", "✌️", "🤞", "🫶", "🤟", "🤙", "👈", "👉", "👆", "👇", "👍", "👎", "👏", "🙌", "🤝", "🙏", "💪", "🫵"] },
+  { name: "Hearts", icon: "♡", emojis: ["❤️", "🧡", "💛", "💚", "🩵", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "❤️‍🩹", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟", "❣️", "💌", "💋"] },
+  { name: "Fun", icon: "✦", emojis: ["✨", "🔥", "🎉", "🎊", "🎈", "🎁", "🏆", "⚡", "💫", "⭐", "🌈", "☀️", "🌙", "🌊", "🌸", "🍀", "🚀", "💯", "✅", "💡", "🎵", "📸", "☕", "🍕"] },
+];
+
+const gifs = [
+  { id: "celebrate", label: "Celebrate!", emoji: "🎉", colors: ["#7057db", "#ff7ca8"] },
+  { id: "love-it", label: "Love it", emoji: "😍", colors: ["#ef5a70", "#ffb06d"] },
+  { id: "lets-go", label: "Let's go!", emoji: "🚀", colors: ["#116e8b", "#53c9a8"] },
+  { id: "wow", label: "WOW", emoji: "🤯", colors: ["#ce653f", "#f4ca64"] },
+  { id: "thank-you", label: "Thank you", emoji: "🫶", colors: ["#9859a8", "#ef9ab0"] },
+  { id: "good-job", label: "Good job!", emoji: "👏", colors: ["#2871a5", "#6bbbd2"] },
+  { id: "hello", label: "Hello!", emoji: "👋", colors: ["#168568", "#8bcf8e"] },
+  { id: "coffee", label: "Coffee?", emoji: "☕", colors: ["#765448", "#c99b73"] },
+];
+
+function decodeStoredMessage(value: string) {
+  const match = value.match(/^\[gif:([a-z0-9-]+)]\s*(.*)$/i);
+  return match ? { text: match[2], gif: match[1] } : { text: value };
+}
+
 export function ChatApp() {
   const [chats, setChats] = useState(initialChats);
   const [activeId, setActiveId] = useState("maya");
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
-  const [showEmoji, setShowEmoji] = useState(false);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [pickerTab, setPickerTab] = useState<"emoji" | "gif">("emoji");
+  const [emojiGroup, setEmojiGroup] = useState("Smileys");
+  const [gifQuery, setGifQuery] = useState("");
+  const [reactionTarget, setReactionTarget] = useState<Message["id"] | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -152,13 +181,16 @@ export function ChatApp() {
         const payload = await response.json() as {
           messages?: Array<{ id: string; ciphertext: string; iv: string; createdAt: string; mine: boolean }>;
         };
-        const decrypted = await Promise.all((payload.messages ?? []).map(async (message) => ({
-          id: message.id,
-          text: await decryptMessage(activeId, message),
-          time: new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(message.createdAt)),
-          mine: message.mine,
-          status: message.mine ? "read" as const : undefined,
-        })));
+        const decrypted = await Promise.all((payload.messages ?? []).map(async (message) => {
+          const content = decodeStoredMessage(await decryptMessage(activeId, message));
+          return {
+            id: message.id,
+            ...content,
+            time: new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(message.createdAt)),
+            mine: message.mine,
+            status: message.mine ? "read" as const : undefined,
+          };
+        }));
         if (cancelled || decrypted.length === 0) return;
         setChats((current) => current.map((chat) => {
           if (chat.id !== activeId) return chat;
@@ -184,7 +216,7 @@ export function ChatApp() {
 
   async function persistEncryptedMessage(chat: Chat, message: Message) {
     try {
-      const encrypted = await encryptMessage(chat.id, message.text);
+      const encrypted = await encryptMessage(chat.id, message.gif ? `[gif:${message.gif}] ${message.text}` : message.text);
       const response = await fetch("/api/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "x-whisper-device-id": getDeviceId() },
@@ -232,8 +264,35 @@ export function ChatApp() {
       ),
     );
     setDraft("");
-    setShowEmoji(false);
+    setShowMediaPicker(false);
     void persistEncryptedMessage(activeChat, message);
+  }
+
+  function sendGif(gif: (typeof gifs)[number]) {
+    const message: Message = {
+      id: `local-${crypto.randomUUID()}`,
+      text: gif.label,
+      gif: gif.id,
+      time: formatTime(),
+      mine: true,
+      status: "sent",
+    };
+    setChats((current) => current.map((chat) => chat.id === activeChat.id
+      ? { ...chat, preview: `GIF · ${gif.label}`, time: message.time, messages: [...chat.messages, message] }
+      : chat));
+    setShowMediaPicker(false);
+    setGifQuery("");
+    void persistEncryptedMessage(activeChat, message);
+  }
+
+  function reactToMessage(messageId: Message["id"], reaction: string) {
+    setChats((current) => current.map((chat) => chat.id === activeChat.id ? {
+      ...chat,
+      messages: chat.messages.map((message) => message.id === messageId
+        ? { ...message, reactions: message.reactions?.includes(reaction) ? message.reactions.filter((item) => item !== reaction) : [...(message.reactions ?? []), reaction] }
+        : message),
+    } : chat));
+    setReactionTarget(null);
   }
 
   function flash(message: string) {
@@ -321,11 +380,21 @@ export function ChatApp() {
                 {!message.mine && <span className={`mini-avatar avatar-${activeChat.color}`}>{activeChat.initials}</span>}
                 <div className="bubble">
                   {message.replyTo && <div className="reply-quote">{message.replyTo}</div>}
-                  <p>{message.text}</p>
+                  {message.gif ? (() => {
+                    const gif = gifs.find((item) => item.id === message.gif) ?? gifs[0];
+                    return <div className={`gif-message gif-${gif.id}`} style={{ "--gif-a": gif.colors[0], "--gif-b": gif.colors[1] } as CSSProperties}><span>{gif.emoji}</span><strong>{gif.label}</strong><i>GIF</i></div>;
+                  })() : <p>{message.text}</p>}
                   <span className="message-meta">
                     {message.time}
                     {message.mine && <b className={message.status === "failed" ? "failed" : ""} aria-label={message.status === "read" ? "Read" : message.status === "failed" ? "Failed" : "Sent"}>{message.status === "read" ? "✓✓" : message.status === "failed" ? "!" : "✓"}</b>}
                   </span>
+                  <button className="add-reaction" aria-label="React to message" onClick={() => setReactionTarget(reactionTarget === message.id ? null : message.id)}>☺</button>
+                  {reactionTarget === message.id && (
+                    <div className="reaction-picker">
+                      {["❤️", "😂", "😮", "😢", "🔥", "👍", "👎", "🎉"].map((reaction) => <button key={reaction} onClick={() => reactToMessage(message.id, reaction)}>{reaction}</button>)}
+                    </div>
+                  )}
+                  {!!message.reactions?.length && <div className="message-reactions">{message.reactions.map((reaction) => <button key={reaction} onClick={() => reactToMessage(message.id, reaction)}>{reaction} <span>1</span></button>)}</div>}
                 </div>
               </div>
             ))}
@@ -333,17 +402,31 @@ export function ChatApp() {
         </div>
 
         <div className="composer-zone">
-          {showEmoji && (
-            <div className="emoji-picker" aria-label="Emoji picker">
-              {["✨", "❤️", "😂", "👍", "🔥", "☀️", "🎉", "👋"].map((emoji) => (
-                <button key={emoji} onClick={() => setDraft((value) => value + emoji)}>{emoji}</button>
-              ))}
+          {showMediaPicker && (
+            <div className="media-picker" aria-label="Emoji and GIF picker">
+              <div className="picker-tabs">
+                <button className={pickerTab === "emoji" ? "active" : ""} onClick={() => setPickerTab("emoji")}>Emoji</button>
+                <button className={pickerTab === "gif" ? "active" : ""} onClick={() => setPickerTab("gif")}>GIFs</button>
+                <button className="picker-close" onClick={() => setShowMediaPicker(false)} aria-label="Close picker">×</button>
+              </div>
+              {pickerTab === "emoji" ? (
+                <>
+                  <div className="emoji-categories">{emojiGroups.map((group) => <button key={group.name} className={emojiGroup === group.name ? "active" : ""} title={group.name} onClick={() => setEmojiGroup(group.name)}>{group.icon}</button>)}</div>
+                  <p className="picker-label">{emojiGroup}</p>
+                  <div className="emoji-grid">{emojiGroups.find((group) => group.name === emojiGroup)?.emojis.map((emoji) => <button key={emoji} onClick={() => setDraft((value) => value + emoji)}>{emoji}</button>)}</div>
+                </>
+              ) : (
+                <>
+                  <div className="gif-search"><span>⌕</span><input value={gifQuery} onChange={(event) => setGifQuery(event.target.value)} placeholder="Search GIFs" aria-label="Search GIFs" /></div>
+                  <div className="gif-grid">{gifs.filter((gif) => gif.label.toLowerCase().includes(gifQuery.toLowerCase())).map((gif) => <button key={gif.id} onClick={() => sendGif(gif)} className={`gif-card gif-${gif.id}`} style={{ "--gif-a": gif.colors[0], "--gif-b": gif.colors[1] } as CSSProperties}><span>{gif.emoji}</span><strong>{gif.label}</strong><i>GIF</i></button>)}</div>
+                </>
+              )}
             </div>
           )}
           <form className="composer" onSubmit={sendMessage}>
             <button type="button" className="composer-button" aria-label="Attach file" onClick={() => flash("Choose a photo, file, or location")}>⌇</button>
             <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message…" aria-label="Message" />
-            <button type="button" className="composer-button" aria-label="Add emoji" onClick={() => setShowEmoji((value) => !value)}>☺</button>
+            <button type="button" className={`composer-button ${showMediaPicker ? "active" : ""}`} aria-label="Add emoji or GIF" onClick={() => setShowMediaPicker((value) => !value)}>☺</button>
             <button type={draft.trim() ? "submit" : "button"} className={`send-button ${draft.trim() ? "ready" : ""}`} aria-label={draft.trim() ? "Send message" : "Record voice message"} onClick={() => !draft.trim() && flash("Hold to record a voice message")}>
               {draft.trim() ? "➤" : "♩"}
             </button>
