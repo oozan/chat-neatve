@@ -62,12 +62,18 @@ function isValidEncryptedField(value: unknown, maximum: number) {
   return typeof value === "string" && value.length > 0 && value.length <= maximum && /^[A-Za-z0-9+/=]+$/.test(value);
 }
 
+function json(data: unknown, init?: ResponseInit) {
+  const headers = new Headers(init?.headers);
+  headers.set("cache-control", "no-store");
+  return Response.json(data, { ...init, headers });
+}
+
 export async function GET(request: Request) {
   const { userId } = identity(request);
-  if (!userId) return Response.json({ error: "Authentication is required" }, { status: 401 });
+  if (!userId) return json({ error: "Authentication is required" }, { status: 401 });
 
   const conversationId = new URL(request.url).searchParams.get("conversationId")?.trim();
-  if (!conversationId) return Response.json({ error: "conversationId is required" }, { status: 400 });
+  if (!conversationId || !/^[a-z0-9-]{1,80}$/i.test(conversationId)) return json({ error: "A valid conversationId is required" }, { status: 400 });
 
   await initializeDatabase();
   const db = database();
@@ -75,14 +81,14 @@ export async function GET(request: Request) {
     "SELECT 1 AS allowed FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1",
   ).bind(conversationId, userId).first();
 
-  if (!membership) return Response.json({ messages: [] });
+  if (!membership) return json({ messages: [] });
 
   const result = await db.prepare(
     `SELECT id, conversation_id, sender_id, ciphertext, iv, created_at
      FROM messages WHERE conversation_id = ? ORDER BY created_at ASC, id ASC LIMIT 250`,
   ).bind(conversationId).all() as D1Result<StoredMessage>;
 
-  return Response.json({
+  return json({
     messages: (result.results ?? []).map((message) => ({
       id: message.id,
       ciphertext: message.ciphertext,
@@ -95,38 +101,40 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const { userId, email } = identity(request);
-  if (!userId) return Response.json({ error: "Authentication is required" }, { status: 401 });
+  if (!userId) return json({ error: "Authentication is required" }, { status: 401 });
 
-  const payload = await request.json() as {
-    conversationId?: string;
-    conversationTitle?: string;
-    ciphertext?: string;
-    iv?: string;
-  };
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (contentLength > 90_000) return json({ error: "Request body is too large" }, { status: 413 });
+
+  let payload: { conversationId?: string; ciphertext?: string; iv?: string };
+  try {
+    payload = await request.json() as typeof payload;
+  } catch {
+    return json({ error: "A JSON request body is required" }, { status: 400 });
+  }
   const conversationId = payload.conversationId?.trim();
-  const conversationTitle = payload.conversationTitle?.trim();
 
   if (!conversationId || !/^[a-z0-9-]{1,80}$/i.test(conversationId)) {
-    return Response.json({ error: "A valid conversationId is required" }, { status: 400 });
-  }
-  if (!conversationTitle || conversationTitle.length > 120) {
-    return Response.json({ error: "A valid conversationTitle is required" }, { status: 400 });
+    return json({ error: "A valid conversationId is required" }, { status: 400 });
   }
   if (!isValidEncryptedField(payload.ciphertext, 64_000) || !isValidEncryptedField(payload.iv, 64)) {
-    return Response.json({ error: "A valid encrypted message payload is required" }, { status: 400 });
+    return json({ error: "A valid encrypted message payload is required" }, { status: 400 });
   }
 
   await initializeDatabase();
   const db = database();
+  const membership = await db.prepare(
+    "SELECT 1 AS allowed FROM conversation_members WHERE conversation_id = ? AND user_id = ? LIMIT 1",
+  ).bind(conversationId, userId).first();
+  if (!membership) return json({ error: "You are not a member of this conversation" }, { status: 403 });
+
   const id = crypto.randomUUID();
   await db.batch([
     db.prepare("INSERT OR IGNORE INTO users (id, email) VALUES (?, ?)").bind(userId, email),
-    db.prepare("INSERT OR IGNORE INTO conversations (id, title) VALUES (?, ?)").bind(conversationId, conversationTitle),
-    db.prepare("INSERT OR IGNORE INTO conversation_members (conversation_id, user_id) VALUES (?, ?)").bind(conversationId, userId),
     db.prepare(
       "INSERT INTO messages (id, conversation_id, sender_id, ciphertext, iv) VALUES (?, ?, ?, ?, ?)",
     ).bind(id, conversationId, userId, payload.ciphertext, payload.iv),
   ]);
 
-  return Response.json({ message: { id, createdAt: new Date().toISOString() } }, { status: 201 });
+  return json({ message: { id, createdAt: new Date().toISOString() } }, { status: 201 });
 }

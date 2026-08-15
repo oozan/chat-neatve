@@ -59,9 +59,15 @@ function identity(request: Request) {
   };
 }
 
+function json(data: unknown, init?: ResponseInit) {
+  const headers = new Headers(init?.headers);
+  headers.set("cache-control", "no-store");
+  return Response.json(data, { ...init, headers });
+}
+
 export async function GET(request: Request) {
   const { userId } = identity(request);
-  if (!userId) return Response.json({ error: "Authentication is required" }, { status: 401 });
+  if (!userId) return json({ error: "Authentication is required" }, { status: 401 });
 
   await initializeDatabase();
   const result = await database().prepare(
@@ -77,7 +83,7 @@ export async function GET(request: Request) {
      LIMIT 100`,
   ).bind(userId).all() as D1Result<StoredConversation>;
 
-  return Response.json({
+  return json({
     conversations: (result.results ?? []).map((conversation) => ({
       id: conversation.id,
       title: conversation.title,
@@ -91,19 +97,22 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const { userId, email } = identity(request);
-  if (!userId) return Response.json({ error: "Authentication is required" }, { status: 401 });
+  if (!userId) return json({ error: "Authentication is required" }, { status: 401 });
+
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (contentLength > 2_000) return json({ error: "Request body is too large" }, { status: 413 });
 
   let payload: { title?: unknown; kind?: unknown };
   try {
     payload = await request.json() as { title?: unknown; kind?: unknown };
   } catch {
-    return Response.json({ error: "A JSON request body is required" }, { status: 400 });
+    return json({ error: "A JSON request body is required" }, { status: 400 });
   }
 
   const title = typeof payload.title === "string" ? payload.title.trim().replace(/\s+/g, " ") : "";
   const kind = payload.kind === "group" || payload.kind === "saved" ? payload.kind : "direct";
   if (title.length < 1 || title.length > 80) {
-    return Response.json({ error: "Conversation title must be between 1 and 80 characters" }, { status: 400 });
+    return json({ error: "Conversation title must be between 1 and 80 characters" }, { status: 400 });
   }
 
   await initializeDatabase();
@@ -116,5 +125,5 @@ export async function POST(request: Request) {
     db.prepare("INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)").bind(id, userId),
   ]);
 
-  return Response.json({ conversation: { id, title, kind, createdAt, lastActivity: createdAt, messageCount: 0 } }, { status: 201 });
+  return json({ conversation: { id, title, kind, createdAt, lastActivity: createdAt, messageCount: 0 } }, { status: 201 });
 }

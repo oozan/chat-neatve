@@ -28,8 +28,9 @@ test("server-renders the Whisper chat experience", async () => {
 });
 
 test("keeps plaintext out of the persistence boundary", async () => {
-  const [route, cryptoClient, schema, hosting] = await Promise.all([
+  const [route, conversationsRoute, cryptoClient, schema, hosting] = await Promise.all([
     readFile(new URL("../app/api/messages/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/conversations/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/client-crypto.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
@@ -40,8 +41,19 @@ test("keeps plaintext out of the persistence boundary", async () => {
   assert.match(route, /ciphertext/);
   assert.match(route, /conversation_members/);
   assert.doesNotMatch(route, /payload\.text|plaintext/);
+  assert.match(route, /not a member of this conversation/);
+  assert.doesNotMatch(route, /INSERT OR IGNORE INTO conversation_members/);
+  assert.match(conversationsRoute, /WHERE cm\.user_id = \?/);
+  assert.match(conversationsRoute, /cache-control/);
   assert.match(schema, /idx_messages_conversation_created_at/);
   assert.match(hosting, /"d1": "DB"/);
+});
+
+test("adds baseline browser security headers", async () => {
+  const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
+  assert.match(worker, /x-content-type-options/);
+  assert.match(worker, /strict-transport-security/);
+  assert.match(worker, /permissions-policy/);
 });
 
 test("keeps online GIF provider credentials on the server", async () => {

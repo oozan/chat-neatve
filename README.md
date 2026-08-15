@@ -6,11 +6,14 @@ Whisper is a responsive Telegram-inspired chat application with client-side mess
 
 - Responsive desktop and mobile conversation UI
 - Conversation search, filtering, unread states, details, and message composer
+- Durable conversation creation and restoration across sessions
+- Automatic encrypted message synchronization with offline status and retry controls
 - Optimistic sending with delivered, read, and failed states
 - AES-256-GCM encryption in the browser before network transmission
 - Non-exportable conversation keys stored in IndexedDB on the device
 - Cloudflare D1 persistence containing ciphertext and IVs, never message plaintext
 - Server-side conversation membership checks
+- Payload size limits, no-store API responses, and baseline browser security headers
 - ChatGPT/Sites identity headers in production with a local development device identity fallback
 - Generated and versioned database migrations
 
@@ -50,7 +53,8 @@ This repository is an MVP, not an audited messenger protocol. The current experi
 
 - `app/chat-app.tsx` — product interface and chat interactions
 - `app/client-crypto.ts` — device-side encryption and key vault
-- `app/api/messages/route.ts` — ciphertext-only message API
+- `app/api/conversations/route.ts` — durable user-owned conversation API
+- `app/api/messages/route.ts` — membership-protected ciphertext-only message API
 - `db/schema.ts` — relational data model
 - `drizzle/` — generated D1 migration
 - `.openai/hosting.json` — deployment bindings

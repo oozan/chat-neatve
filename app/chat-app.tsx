@@ -40,6 +40,7 @@ type Chat = {
   color: string;
   messages: Message[];
   kind?: "direct" | "group" | "saved";
+  persisted?: boolean;
 };
 
 const initialChats: Chat[] = [
@@ -239,6 +240,7 @@ export function ChatApp() {
             color: ["green", "blue", "violet", "amber", "cyan", "coral"][index % 6],
             messages: [],
             kind: chat.kind,
+            persisted: true,
           }));
           return restored.length ? [...restored, ...current] : current;
         });
@@ -338,30 +340,43 @@ export function ChatApp() {
   }
 
   async function persistEncryptedMessage(chat: Chat, message: Message) {
+    let secureChat = chat;
     try {
+      if (!chat.persisted) {
+        const createResponse = await fetch("/api/conversations", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-whisper-device-id": getDeviceId() },
+          body: JSON.stringify({ title: chat.name, kind: chat.kind ?? "direct" }),
+        });
+        const created = await createResponse.json() as { conversation?: { id: string }; error?: string };
+        if (!createResponse.ok || !created.conversation) throw new Error(created.error ?? "Conversation creation failed");
+        secureChat = { ...chat, id: created.conversation.id, persisted: true };
+        setActiveId(secureChat.id);
+        setChats((current) => current.map((item) => item.id === chat.id ? { ...item, id: secureChat.id, persisted: true } : item));
+      }
+
       const storedContent = message.gifUrl
         ? `[online-gif]${JSON.stringify({ id: message.gif?.replace(/^tenor-/, ""), label: message.text, url: message.gifUrl, previewUrl: message.gifPreviewUrl ?? message.gifUrl })}`
         : message.gif ? `[gif:${message.gif}] ${message.text}` : message.text;
-      const encrypted = await encryptMessage(chat.id, storedContent);
+      const encrypted = await encryptMessage(secureChat.id, storedContent);
       const response = await fetch("/api/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "x-whisper-device-id": getDeviceId() },
         body: JSON.stringify({
-          conversationId: chat.id,
-          conversationTitle: chat.name,
+          conversationId: secureChat.id,
           ...encrypted,
         }),
       });
       if (!response.ok) throw new Error("Message storage failed");
       const payload = await response.json() as { message: { id: string } };
       setChats((current) => current.map((item) =>
-        item.id === chat.id
+        item.id === secureChat.id || item.id === chat.id
           ? { ...item, messages: item.messages.map((entry) => entry.id === message.id ? { ...entry, id: payload.message.id, status: "read" } : entry) }
           : item,
       ));
     } catch {
       setChats((current) => current.map((item) =>
-        item.id === chat.id
+        item.id === chat.id || item.id === secureChat.id
           ? { ...item, messages: item.messages.map((entry) => entry.id === message.id ? { ...entry, status: "failed" } : entry) }
           : item,
       ));
@@ -391,6 +406,7 @@ export function ChatApp() {
         color: "green",
         messages: [],
         kind: "direct",
+        persisted: true,
       };
       setChats((current) => [chat, ...current]);
       setActiveId(chat.id);
