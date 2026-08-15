@@ -84,6 +84,9 @@ button { color: inherit; }
 .brand-lockup strong { font-size: 18px; letter-spacing: -0.5px; }
 .brand-lockup span { margin-top: 3px; color: var(--muted); font-size: 11px; }
 .status-dot { display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: #22a181; }
+.status-dot.status-syncing { background: #d79b35; animation: status-pulse 1s ease-in-out infinite; }
+.status-dot.status-offline { background: #b96a5f; }
+@keyframes status-pulse { 50% { opacity: .35; } }
 
 .icon-button {
   display: grid;
@@ -188,6 +191,7 @@ button { color: inherit; }
 .message-meta { display: flex; justify-content: flex-end; gap: 4px; margin-top: 3px; color: #89938f; font-size: 9px; }
 .message-meta b { color: var(--green); letter-spacing: -2px; }
 .message-meta b.failed { color: #bc5145; letter-spacing: 0; }
+.retry-message { width: 17px; height: 17px; padding: 0; border: 0; border-radius: 50%; background: #bc5145; color: #fff; font-size: 10px; font-weight: 900; cursor: pointer; }
 .reply-quote { margin: 0 0 7px; padding: 5px 8px; border-left: 3px solid var(--green); border-radius: 4px; background: rgba(15,124,102,.06); color: #59716a; font-size: 10px; }
 .add-reaction { position: absolute; top: 50%; right: -36px; display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: rgba(255,255,255,.95); box-shadow: 0 3px 12px rgba(30,48,42,.1); color: #73807b; cursor: pointer; opacity: 0; transform: translateY(-50%) scale(.8); transition: .15s ease; }
 .mine .add-reaction { right: auto; left: -36px; }
@@ -287,6 +291,20 @@ button { color: inherit; }
 .toast { position: fixed; z-index: 20; bottom: 95px; left: 50%; padding: 10px 15px; border-radius: 12px; background: #1d302a; box-shadow: 0 8px 30px rgba(20,40,33,.24); color: #fff; font-size: 11px; transform: translateX(-50%); animation: toast-in .18s ease-out; }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 
+.modal-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; padding: 20px; place-items: center; background: rgba(16, 30, 26, .48); backdrop-filter: blur(5px); }
+.new-chat-modal { position: relative; width: min(100%, 430px); padding: 30px; border: 1px solid rgba(255,255,255,.7); border-radius: 24px; background: #fff; box-shadow: 0 24px 80px rgba(12,31,25,.28); animation: picker-in .18s ease-out; }
+.modal-close { position: absolute; top: 15px; right: 15px; width: 34px; height: 34px; border: 0; border-radius: 10px; background: #f1f4f2; color: #64706c; font-size: 21px; cursor: pointer; }
+.modal-icon { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 15px; background: var(--green-soft); color: var(--green); font-size: 25px; }
+.new-chat-modal h2 { margin: 18px 0 7px; font-size: 21px; letter-spacing: -.5px; }
+.new-chat-modal > p { margin: 0 0 22px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.new-chat-modal label { display: block; margin-bottom: 7px; color: #52615c; font-size: 11px; font-weight: 800; }
+.new-chat-modal input { width: 100%; height: 46px; padding: 0 13px; border: 1px solid #dce3df; border-radius: 12px; outline: 0; background: #f8faf9; color: var(--ink); }
+.new-chat-modal input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(14,124,102,.12); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+.modal-actions button { min-height: 40px; padding: 0 16px; border: 0; border-radius: 11px; background: #eef2f0; color: #66736e; font-size: 12px; font-weight: 800; cursor: pointer; }
+.modal-actions button.primary { background: var(--green); color: #fff; }
+.modal-actions button:disabled { cursor: not-allowed; opacity: .45; }
+
 @media (max-width: 1120px) {
   .sidebar { flex-basis: 340px; }
   .info-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 300px; box-shadow: -12px 0 36px rgba(30,49,42,.12); }
@@ -313,6 +331,7 @@ button { color: inherit; }
   .message-space::before { left: 0; }
   .info-panel { width: min(90%, 320px); }
   .toast { bottom: 80px; width: max-content; max-width: 84%; text-align: center; }
+  .new-chat-modal { padding: 25px 20px 20px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

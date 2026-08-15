@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { decryptMessage, encryptMessage, getDeviceId } from "./client-crypto";
 
@@ -39,6 +39,7 @@ type Chat = {
   muted?: boolean;
   color: string;
   messages: Message[];
+  kind?: "direct" | "group" | "saved";
 };
 
 const initialChats: Chat[] = [
@@ -187,12 +188,68 @@ export function ChatApp() {
   const [showInfo, setShowInfo] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [newChatName, setNewChatName] = useState("");
+  const [creatingChat, setCreatingChat] = useState(false);
+  const [syncState, setSyncState] = useState<"online" | "syncing" | "offline">("syncing");
+  const searchRef = useRef<HTMLInputElement>(null);
+  const messageSpaceRef = useRef<HTMLDivElement>(null);
 
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
   const visibleChats = useMemo(
     () => chats.filter((chat) => chat.name.toLowerCase().includes(query.toLowerCase())),
     [chats, query],
   );
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setMobileChatOpen(false);
+        window.setTimeout(() => searchRef.current?.focus(), 0);
+      }
+      if (event.key === "Escape") {
+        setShowNewChat(false);
+        setShowMediaPicker(false);
+        setReactionTarget(null);
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadConversations() {
+      try {
+        const response = await fetch("/api/conversations", { headers: { "x-whisper-device-id": getDeviceId() } });
+        if (!response.ok) throw new Error("Conversation sync failed");
+        const payload = await response.json() as {
+          conversations?: Array<{ id: string; title: string; kind: Chat["kind"]; lastActivity: string; messageCount: number }>;
+        };
+        if (cancelled) return;
+        setChats((current) => {
+          const known = new Set(current.map((chat) => chat.id));
+          const restored = (payload.conversations ?? []).filter((chat) => !known.has(chat.id)).map((chat, index): Chat => ({
+            id: chat.id,
+            name: chat.title,
+            initials: chat.title.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(),
+            preview: chat.messageCount ? "Encrypted conversation" : "No messages yet",
+            time: new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(chat.lastActivity)),
+            color: ["green", "blue", "violet", "amber", "cyan", "coral"][index % 6],
+            messages: [],
+            kind: chat.kind,
+          }));
+          return restored.length ? [...restored, ...current] : current;
+        });
+        setSyncState("online");
+      } catch {
+        if (!cancelled) setSyncState("offline");
+      }
+    }
+    void loadConversations();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!showMediaPicker || pickerTab !== "gif") return;
@@ -227,24 +284,29 @@ export function ChatApp() {
     let cancelled = false;
 
     async function loadEncryptedMessages() {
+      setSyncState((current) => current === "offline" ? "syncing" : current);
       try {
         const response = await fetch(`/api/messages?conversationId=${encodeURIComponent(activeId)}`, {
           headers: { "x-whisper-device-id": getDeviceId() },
         });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error("Message sync failed");
         const payload = await response.json() as {
           messages?: Array<{ id: string; ciphertext: string; iv: string; createdAt: string; mine: boolean }>;
         };
-        const decrypted = await Promise.all((payload.messages ?? []).map(async (message) => {
-          const content = decodeStoredMessage(await decryptMessage(activeId, message));
-          return {
-            id: message.id,
-            ...content,
-            time: new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(message.createdAt)),
-            mine: message.mine,
-            status: message.mine ? "read" as const : undefined,
-          };
-        }));
+        const decrypted = (await Promise.all((payload.messages ?? []).map(async (message) => {
+          try {
+            const content = decodeStoredMessage(await decryptMessage(activeId, message));
+            return {
+              id: message.id,
+              ...content,
+              time: new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(message.createdAt)),
+              mine: message.mine,
+              status: message.mine ? "read" as const : undefined,
+            };
+          } catch {
+            return null;
+          }
+        }))).filter((message): message is NonNullable<typeof message> => message !== null);
         if (cancelled || decrypted.length === 0) return;
         setChats((current) => current.map((chat) => {
           if (chat.id !== activeId) return chat;
@@ -252,14 +314,21 @@ export function ChatApp() {
           const restored = decrypted.filter((message) => !known.has(message.id));
           return restored.length ? { ...chat, messages: [...chat.messages, ...restored] } : chat;
         }));
+        setSyncState("online");
       } catch {
-        // The local encryption key can intentionally be absent on a new device.
+        if (!cancelled) setSyncState("offline");
       }
     }
 
     void loadEncryptedMessages();
-    return () => { cancelled = true; };
+    const interval = window.setInterval(loadEncryptedMessages, 5000);
+    return () => { cancelled = true; window.clearInterval(interval); };
   }, [activeId]);
+
+  useEffect(() => {
+    const element = messageSpaceRef.current;
+    if (element) element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
+  }, [activeChat.messages.length, activeId]);
 
   function selectChat(id: string) {
     setActiveId(id);
@@ -297,6 +366,43 @@ export function ChatApp() {
           : item,
       ));
       flash("Message could not be stored securely. Tap to retry.");
+    }
+  }
+
+  async function createConversation(event: FormEvent) {
+    event.preventDefault();
+    const title = newChatName.trim();
+    if (!title || creatingChat) return;
+    setCreatingChat(true);
+    try {
+      const response = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-whisper-device-id": getDeviceId() },
+        body: JSON.stringify({ title, kind: "direct" }),
+      });
+      const payload = await response.json() as { conversation?: { id: string; title: string }; error?: string };
+      if (!response.ok || !payload.conversation) throw new Error(payload.error ?? "Conversation creation failed");
+      const chat: Chat = {
+        id: payload.conversation.id,
+        name: payload.conversation.title,
+        initials: payload.conversation.title.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(),
+        preview: "No messages yet",
+        time: "Now",
+        color: "green",
+        messages: [],
+        kind: "direct",
+      };
+      setChats((current) => [chat, ...current]);
+      setActiveId(chat.id);
+      setMobileChatOpen(true);
+      setNewChatName("");
+      setShowNewChat(false);
+      setSyncState("online");
+      flash("Private conversation created");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Conversation could not be created");
+    } finally {
+      setCreatingChat(false);
     }
   }
 
@@ -383,19 +489,19 @@ export function ChatApp() {
           <button className="avatar avatar-me" aria-label="Open profile" onClick={() => flash("Profile settings are ready for the next step")}>OZ</button>
           <div className="brand-lockup">
             <strong>Whisper</strong>
-            <span><i className="status-dot" /> encrypted</span>
+            <span><i className={`status-dot status-${syncState}`} /> {syncState === "online" ? "encrypted · synced" : syncState === "syncing" ? "connecting securely…" : "offline · messages queued"}</span>
           </div>
-          <button className="icon-button new-chat" aria-label="Start new chat" onClick={() => flash("New conversation")}>＋</button>
+          <button className="icon-button new-chat" aria-label="Start new chat" onClick={() => setShowNewChat(true)}>＋</button>
         </header>
 
         <div className="search-wrap">
           <span aria-hidden="true">⌕</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" aria-label="Search conversations" />
+          <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" aria-label="Search conversations" />
           <kbd>⌘ K</kbd>
         </div>
 
         <nav className="filter-tabs" aria-label="Conversation filters">
-          <button className="active">All <span>7</span></button>
+          <button className={!query ? "active" : ""} onClick={() => setQuery("")}>All <span>{chats.length}</span></button>
           <button onClick={() => setQuery("Crew")}>Groups</button>
           <button onClick={() => setQuery("Saved")}>Saved</button>
         </nav>
@@ -448,7 +554,7 @@ export function ChatApp() {
           <p><strong>Messages are end-to-end encrypted.</strong> No one outside this chat can read them.</p>
         </div>
 
-        <div className="message-space">
+        <div className="message-space" ref={messageSpaceRef}>
           <div className="day-divider"><span>Today</span></div>
           <div className="messages" aria-live="polite">
             {activeChat.messages.map((message) => (
@@ -468,7 +574,9 @@ export function ChatApp() {
                   })() : <p>{message.text}</p>}
                   <span className="message-meta">
                     {message.time}
-                    {message.mine && <b className={message.status === "failed" ? "failed" : ""} aria-label={message.status === "read" ? "Read" : message.status === "failed" ? "Failed" : "Sent"}>{message.status === "read" ? "✓✓" : message.status === "failed" ? "!" : "✓"}</b>}
+                    {message.mine && (message.status === "failed" ? (
+                      <button className="retry-message" aria-label="Retry sending message" title="Retry" onClick={() => void persistEncryptedMessage(activeChat, message)}>!</button>
+                    ) : <b aria-label={message.status === "read" ? "Read" : "Sent"}>{message.status === "read" ? "✓✓" : "✓"}</b>)}
                   </span>
                   <button className="add-reaction" aria-label="React to message" onClick={() => setReactionTarget(reactionTarget === message.id ? null : message.id)}>☺</button>
                   {reactionTarget === message.id && (
@@ -542,6 +650,25 @@ export function ChatApp() {
           <div className="media-row"><strong>Shared media</strong><button onClick={() => flash("All shared media")}>View all</button></div>
           <div className="media-grid"><span>Lisbon</span><span>Notes</span><span>4 files</span></div>
         </aside>
+      )}
+
+      {showNewChat && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowNewChat(false)}>
+          <section className="new-chat-modal" role="dialog" aria-modal="true" aria-labelledby="new-chat-title">
+            <button className="modal-close" onClick={() => setShowNewChat(false)} aria-label="Close new conversation">×</button>
+            <span className="modal-icon">⌁</span>
+            <h2 id="new-chat-title">New private conversation</h2>
+            <p>Create an encrypted space. Only ciphertext is stored on the server.</p>
+            <form onSubmit={createConversation}>
+              <label htmlFor="new-chat-name">Conversation name</label>
+              <input id="new-chat-name" maxLength={80} value={newChatName} onChange={(event) => setNewChatName(event.target.value)} placeholder="e.g. Project Atlas" />
+              <div className="modal-actions">
+                <button type="button" onClick={() => setShowNewChat(false)}>Cancel</button>
+                <button className="primary" type="submit" disabled={!newChatName.trim() || creatingChat}>{creatingChat ? "Creating…" : "Create chat"}</button>
+              </div>
+            </form>
+          </section>
+        </div>
       )}
 
       {notice && <div className="toast" role="status">{notice}</div>}
