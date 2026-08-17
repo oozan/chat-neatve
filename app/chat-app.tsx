@@ -27,6 +27,10 @@ type OnlineGif = {
   provider: "Tenor";
 };
 
+type DecodedStoredContent =
+  | { recordType: "message"; text: string; gif?: string; gifUrl?: string; gifPreviewUrl?: string }
+  | { recordType: "reaction"; targetId: string; emoji: string; active: boolean };
+
 type Chat = {
   id: string;
   name: string;
@@ -159,19 +163,31 @@ const gifs = [
   { id: "coffee", label: "Coffee?", emoji: "☕", colors: ["#765448", "#c99b73"] },
 ];
 
-function decodeStoredMessage(value: string) {
+function decodeStoredMessage(value: string): DecodedStoredContent {
+  if (value.startsWith("[reaction]")) {
+    try {
+      const data = JSON.parse(value.slice(10)) as { targetId?: unknown; emoji?: unknown; active?: unknown };
+      if (typeof data.targetId === "string" && typeof data.emoji === "string" && typeof data.active === "boolean") {
+        return { recordType: "reaction", targetId: data.targetId, emoji: data.emoji, active: data.active };
+      }
+    } catch {
+      // Invalid encrypted control records are ignored as ordinary messages below.
+    }
+  }
   if (value.startsWith("[online-gif]")) {
     try {
       const data = JSON.parse(value.slice(12)) as { id: string; label: string; url: string; previewUrl: string };
       if (data.id && data.label && data.url && data.previewUrl) {
-        return { text: data.label, gif: `tenor-${data.id}`, gifUrl: data.url, gifPreviewUrl: data.previewUrl };
+        return { recordType: "message", text: data.label, gif: `tenor-${data.id}`, gifUrl: data.url, gifPreviewUrl: data.previewUrl };
       }
     } catch {
-      return { text: "GIF" };
+      return { recordType: "message", text: "GIF" };
     }
   }
   const match = value.match(/^\[gif:([a-z0-9-]+)]\s*(.*)$/i);
-  return match ? { text: match[2], gif: match[1] } : { text: value };
+  return match
+    ? { recordType: "message", text: match[2], gif: match[1] }
+    : { recordType: "message", text: value };
 }
 
 export function ChatApp() {
@@ -298,13 +314,7 @@ export function ChatApp() {
         const decrypted = (await Promise.all((payload.messages ?? []).map(async (message) => {
           try {
             const content = decodeStoredMessage(await decryptMessage(activeId, message));
-            return {
-              id: message.id,
-              ...content,
-              time: new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(message.createdAt)),
-              mine: message.mine,
-              status: message.mine ? "read" as const : undefined,
-            };
+            return { ...message, content };
           } catch {
             return null;
           }
@@ -313,8 +323,34 @@ export function ChatApp() {
         setChats((current) => current.map((chat) => {
           if (chat.id !== activeId) return chat;
           const known = new Set(chat.messages.map((message) => message.id));
-          const restored = decrypted.filter((message) => !known.has(message.id));
-          return restored.length ? { ...chat, messages: [...chat.messages, ...restored] } : chat;
+          const restored = decrypted.flatMap((record): Message[] => {
+            if (record.content.recordType !== "message" || known.has(record.id)) return [];
+            return [{
+              id: record.id,
+              text: record.content.text,
+              gif: record.content.gif,
+              gifUrl: record.content.gifUrl,
+              gifPreviewUrl: record.content.gifPreviewUrl,
+              time: new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(record.createdAt)),
+              mine: record.mine,
+              status: record.mine ? "read" : undefined,
+            }];
+          });
+          let messages = restored.length ? [...chat.messages, ...restored] : chat.messages;
+          for (const record of decrypted) {
+            if (record.content.recordType !== "reaction") continue;
+            messages = messages.map((message) => {
+              if (String(message.id) !== record.content.targetId) return message;
+              const reactions = message.reactions ?? [];
+              return {
+                ...message,
+                reactions: record.content.active
+                  ? Array.from(new Set([...reactions, record.content.emoji]))
+                  : reactions.filter((reaction) => reaction !== record.content.emoji),
+              };
+            });
+          }
+          return messages === chat.messages ? chat : { ...chat, messages };
         }));
         setSyncState("online");
       } catch {
@@ -483,14 +519,39 @@ export function ChatApp() {
     void persistEncryptedMessage(activeChat, message);
   }
 
+  async function persistEncryptedReaction(chat: Chat, messageId: string, reaction: string, active: boolean) {
+    const encrypted = await encryptMessage(chat.id, `[reaction]${JSON.stringify({ targetId: messageId, emoji: reaction, active })}`);
+    const response = await fetch("/api/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-whisper-device-id": getDeviceId() },
+      body: JSON.stringify({ conversationId: chat.id, ...encrypted }),
+    });
+    if (!response.ok) throw new Error("Reaction storage failed");
+  }
+
   function reactToMessage(messageId: Message["id"], reaction: string) {
+    const target = activeChat.messages.find((message) => message.id === messageId);
+    if (!target) return;
+    const active = !target.reactions?.includes(reaction);
     setChats((current) => current.map((chat) => chat.id === activeChat.id ? {
       ...chat,
       messages: chat.messages.map((message) => message.id === messageId
-        ? { ...message, reactions: message.reactions?.includes(reaction) ? message.reactions.filter((item) => item !== reaction) : [...(message.reactions ?? []), reaction] }
+        ? { ...message, reactions: active ? [...(message.reactions ?? []), reaction] : message.reactions?.filter((item) => item !== reaction) }
         : message),
     } : chat));
     setReactionTarget(null);
+
+    if (activeChat.persisted && typeof messageId === "string" && !messageId.startsWith("local-")) {
+      void persistEncryptedReaction(activeChat, messageId, reaction, active).catch(() => {
+        setChats((current) => current.map((chat) => chat.id === activeChat.id ? {
+          ...chat,
+          messages: chat.messages.map((message) => message.id === messageId
+            ? { ...message, reactions: active ? message.reactions?.filter((item) => item !== reaction) : [...(message.reactions ?? []), reaction] }
+            : message),
+        } : chat));
+        flash("Reaction could not be synced securely");
+      });
+    }
   }
 
   function flash(message: string) {

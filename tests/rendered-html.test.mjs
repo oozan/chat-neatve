@@ -49,6 +49,17 @@ test("keeps plaintext out of the persistence boundary", async () => {
   assert.match(hosting, /"d1": "DB"/);
 });
 
+test("encrypts reaction events before persistence", async () => {
+  const [client, route] = await Promise.all([
+    readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/messages/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(client, /encryptMessage\(chat\.id, `\[reaction\]/);
+  assert.match(client, /persistEncryptedReaction/);
+  assert.doesNotMatch(route, /reaction|emoji/);
+});
+
 test("adds baseline browser security headers", async () => {
   const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
   assert.match(worker, /x-content-type-options/);
