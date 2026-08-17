@@ -60,6 +60,18 @@ test("encrypts reaction events before persistence", async () => {
   assert.doesNotMatch(route, /reaction|emoji/);
 });
 
+test("keeps drafts device-local and provides in-chat search", async () => {
+  const [client, route] = await Promise.all([
+    readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/messages/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(client, /whisper-draft:/);
+  assert.match(client, /chatSearchResults/);
+  assert.match(client, /Search messages in/);
+  assert.doesNotMatch(route, /draft/);
+});
+
 test("adds baseline browser security headers", async () => {
   const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
   assert.match(worker, /x-content-type-options/);

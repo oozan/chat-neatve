@@ -209,14 +209,24 @@ export function ChatApp() {
   const [newChatName, setNewChatName] = useState("");
   const [creatingChat, setCreatingChat] = useState(false);
   const [syncState, setSyncState] = useState<"online" | "syncing" | "offline">("syncing");
+  const [showChatSearch, setShowChatSearch] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
+  const [highlightedMessageId, setHighlightedMessageId] = useState<Message["id"] | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const chatSearchRef = useRef<HTMLInputElement>(null);
   const messageSpaceRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef(new Map<string, HTMLDivElement>());
 
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
   const visibleChats = useMemo(
     () => chats.filter((chat) => chat.name.toLowerCase().includes(query.toLowerCase())),
     [chats, query],
   );
+  const chatSearchResults = useMemo(() => {
+    const search = chatSearchQuery.trim().toLocaleLowerCase();
+    if (!search) return [];
+    return activeChat.messages.filter((message) => message.text.toLocaleLowerCase().includes(search)).slice().reverse().slice(0, 20);
+  }, [activeChat.messages, chatSearchQuery]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -225,15 +235,38 @@ export function ChatApp() {
         setMobileChatOpen(false);
         window.setTimeout(() => searchRef.current?.focus(), 0);
       }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setShowChatSearch(true);
+        window.setTimeout(() => chatSearchRef.current?.focus(), 0);
+      }
       if (event.key === "Escape") {
         setShowNewChat(false);
         setShowMediaPicker(false);
         setReactionTarget(null);
+        setShowChatSearch(false);
       }
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const stored = localStorage.getItem(`whisper-draft:${initialChats[0].id}`);
+      if (stored) setDraft(stored);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const key = `whisper-draft:${activeId}`;
+      if (draft) localStorage.setItem(key, draft);
+      else localStorage.removeItem(key);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [activeId, draft]);
 
   useEffect(() => {
     let cancelled = false;
@@ -369,10 +402,26 @@ export function ChatApp() {
   }, [activeChat.messages.length, activeId]);
 
   function selectChat(id: string) {
+    const nextDraft = localStorage.getItem(`whisper-draft:${id}`) ?? "";
     setActiveId(id);
+    setDraft(nextDraft);
     setMobileChatOpen(true);
     setShowInfo(false);
+    setShowChatSearch(false);
+    setChatSearchQuery("");
     setChats((current) => current.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)));
+  }
+
+  function openChatSearch() {
+    setShowChatSearch(true);
+    setShowInfo(false);
+    window.setTimeout(() => chatSearchRef.current?.focus(), 0);
+  }
+
+  function focusMessage(messageId: Message["id"]) {
+    setHighlightedMessageId(messageId);
+    messageRefs.current.get(String(messageId))?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => setHighlightedMessageId((current) => current === messageId ? null : current), 1800);
   }
 
   async function persistEncryptedMessage(chat: Chat, message: Message) {
@@ -446,6 +495,7 @@ export function ChatApp() {
       };
       setChats((current) => [chat, ...current]);
       setActiveId(chat.id);
+      setDraft("");
       setMobileChatOpen(true);
       setNewChatName("");
       setShowNewChat(false);
@@ -620,11 +670,33 @@ export function ChatApp() {
             <span>{activeChat.online ? "online now" : "last seen recently"}</span>
           </button>
           <div className="chat-actions">
-            <button className="icon-button" aria-label="Search chat" onClick={() => flash("Search in this conversation")}>⌕</button>
+            <button className={`icon-button ${showChatSearch ? "active" : ""}`} aria-label="Search chat" onClick={() => showChatSearch ? setShowChatSearch(false) : openChatSearch()}>⌕</button>
             <button className="icon-button" aria-label="Start secure call" onClick={() => flash(`Calling ${activeChat.name} securely…`)}>♢</button>
             <button className="icon-button" aria-label="More options" onClick={() => setShowInfo((value) => !value)}>•••</button>
           </div>
         </header>
+
+        {showChatSearch && (
+          <div className="chat-search-panel" role="search">
+            <div className="chat-search-field">
+              <span aria-hidden="true">⌕</span>
+              <input ref={chatSearchRef} value={chatSearchQuery} onChange={(event) => setChatSearchQuery(event.target.value)} placeholder={`Search in ${activeChat.name}`} aria-label={`Search messages in ${activeChat.name}`} />
+              {chatSearchQuery && <button onClick={() => setChatSearchQuery("")} aria-label="Clear chat search">×</button>}
+              <button onClick={() => setShowChatSearch(false)} aria-label="Close chat search">Done</button>
+            </div>
+            {chatSearchQuery.trim() && (
+              <div className="chat-search-results" aria-live="polite">
+                {chatSearchResults.length ? chatSearchResults.map((message) => (
+                  <button key={message.id} onClick={() => focusMessage(message.id)}>
+                    <span>{message.mine ? "You" : activeChat.name}</span>
+                    <strong>{message.text}</strong>
+                    <time>{message.time}</time>
+                  </button>
+                )) : <p>No matching messages</p>}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="encryption-banner">
           <span>⌁</span>
@@ -635,7 +707,11 @@ export function ChatApp() {
           <div className="day-divider"><span>Today</span></div>
           <div className="messages" aria-live="polite">
             {activeChat.messages.map((message) => (
-              <div key={message.id} className={`message-row ${message.mine ? "mine" : "theirs"}`}>
+              <div
+                key={message.id}
+                ref={(element) => { if (element) messageRefs.current.set(String(message.id), element); else messageRefs.current.delete(String(message.id)); }}
+                className={`message-row ${message.mine ? "mine" : "theirs"} ${highlightedMessageId === message.id ? "search-highlight" : ""}`}
+              >
                 {!message.mine && <span className={`mini-avatar avatar-${activeChat.color}`}>{activeChat.initials}</span>}
                 <div className="bubble">
                   {message.replyTo && <div className="reply-quote">{message.replyTo}</div>}
@@ -704,7 +780,7 @@ export function ChatApp() {
               {draft.trim() ? "➤" : "♩"}
             </button>
           </form>
-          <p className="composer-hint">Enter to send · <span>encrypted on this device</span></p>
+          <p className="composer-hint">{draft ? "Draft saved on this device · " : "Enter to send · "}<span>encrypted on this device</span></p>
         </div>
       </section>
 
@@ -717,7 +793,7 @@ export function ChatApp() {
           <div className="quick-actions">
             <button onClick={() => flash("Notifications muted")}><span>♩</span>Mute</button>
             <button onClick={() => flash("Secure call started")}><span>♢</span>Call</button>
-            <button onClick={() => flash("Chat search opened")}><span>⌕</span>Search</button>
+            <button onClick={openChatSearch}><span>⌕</span>Search</button>
           </div>
           <div className="info-card">
             <div><span>Encryption</span><strong>Verified</strong></div>
