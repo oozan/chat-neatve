@@ -28,7 +28,7 @@ type OnlineGif = {
 };
 
 type DecodedStoredContent =
-  | { recordType: "message"; text: string; gif?: string; gifUrl?: string; gifPreviewUrl?: string }
+  | { recordType: "message"; text: string; gif?: string; gifUrl?: string; gifPreviewUrl?: string; replyTo?: string }
   | { recordType: "reaction"; targetId: string; emoji: string; active: boolean };
 
 type Chat = {
@@ -174,6 +174,16 @@ function decodeStoredMessage(value: string): DecodedStoredContent {
       // Invalid encrypted control records are ignored as ordinary messages below.
     }
   }
+  if (value.startsWith("[message]")) {
+    try {
+      const data = JSON.parse(value.slice(9)) as { text?: unknown; replyTo?: unknown };
+      if (typeof data.text === "string" && typeof data.replyTo === "string") {
+        return { recordType: "message", text: data.text, replyTo: data.replyTo };
+      }
+    } catch {
+      return { recordType: "message", text: "Encrypted message" };
+    }
+  }
   if (value.startsWith("[online-gif]")) {
     try {
       const data = JSON.parse(value.slice(12)) as { id: string; label: string; url: string; previewUrl: string };
@@ -212,6 +222,7 @@ export function ChatApp() {
   const [showChatSearch, setShowChatSearch] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [highlightedMessageId, setHighlightedMessageId] = useState<Message["id"] | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ id: Message["id"]; text: string } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const chatSearchRef = useRef<HTMLInputElement>(null);
   const messageSpaceRef = useRef<HTMLDivElement>(null);
@@ -245,6 +256,7 @@ export function ChatApp() {
         setShowMediaPicker(false);
         setReactionTarget(null);
         setShowChatSearch(false);
+        setReplyingTo(null);
       }
     };
     window.addEventListener("keydown", handleShortcut);
@@ -364,6 +376,7 @@ export function ChatApp() {
               gif: record.content.gif,
               gifUrl: record.content.gifUrl,
               gifPreviewUrl: record.content.gifPreviewUrl,
+              replyTo: record.content.replyTo,
               time: new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(record.createdAt)),
               mine: record.mine,
               status: record.mine ? "read" : undefined,
@@ -409,6 +422,7 @@ export function ChatApp() {
     setShowInfo(false);
     setShowChatSearch(false);
     setChatSearchQuery("");
+    setReplyingTo(null);
     setChats((current) => current.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)));
   }
 
@@ -442,7 +456,9 @@ export function ChatApp() {
 
       const storedContent = message.gifUrl
         ? `[online-gif]${JSON.stringify({ id: message.gif?.replace(/^tenor-/, ""), label: message.text, url: message.gifUrl, previewUrl: message.gifPreviewUrl ?? message.gifUrl })}`
-        : message.gif ? `[gif:${message.gif}] ${message.text}` : message.text;
+        : message.gif ? `[gif:${message.gif}] ${message.text}`
+          : message.replyTo ? `[message]${JSON.stringify({ text: message.text, replyTo: message.replyTo })}`
+            : message.text;
       const encrypted = await encryptMessage(secureChat.id, storedContent);
       const response = await fetch("/api/messages", {
         method: "POST",
@@ -519,6 +535,7 @@ export function ChatApp() {
       time: formatTime(),
       mine: true,
       status: "sent",
+      replyTo: replyingTo?.text,
     };
 
     setChats((current) =>
@@ -529,6 +546,7 @@ export function ChatApp() {
       ),
     );
     setDraft("");
+    setReplyingTo(null);
     setShowMediaPicker(false);
     void persistEncryptedMessage(activeChat, message);
   }
@@ -732,6 +750,7 @@ export function ChatApp() {
                     ) : <b aria-label={message.status === "read" ? "Read" : "Sent"}>{message.status === "read" ? "✓✓" : "✓"}</b>)}
                   </span>
                   <button className="add-reaction" aria-label="React to message" onClick={() => setReactionTarget(reactionTarget === message.id ? null : message.id)}>☺</button>
+                  <button className="reply-message" aria-label="Reply to message" onClick={() => { setReplyingTo({ id: message.id, text: message.text }); setReactionTarget(null); }}>↩</button>
                   {reactionTarget === message.id && (
                     <div className="reaction-picker">
                       {["❤️", "😂", "😮", "😢", "🔥", "👍", "👎", "🎉"].map((reaction) => <button key={reaction} onClick={() => reactToMessage(message.id, reaction)}>{reaction}</button>)}
@@ -770,6 +789,13 @@ export function ChatApp() {
                   <div className="gif-grid">{gifs.filter((gif) => gif.label.toLowerCase().includes(gifQuery.toLowerCase())).map((gif) => <button key={gif.id} onClick={() => sendGif(gif)} className={`gif-card gif-${gif.id}`} style={{ "--gif-a": gif.colors[0], "--gif-b": gif.colors[1] } as CSSProperties}><span>{gif.emoji}</span><strong>{gif.label}</strong><i>GIF</i></button>)}</div>
                 </>
               )}
+            </div>
+          )}
+          {replyingTo && (
+            <div className="reply-composer" role="status">
+              <span>Replying to</span>
+              <strong>{replyingTo.text}</strong>
+              <button onClick={() => setReplyingTo(null)} aria-label="Cancel reply">×</button>
             </div>
           )}
           <form className="composer" onSubmit={sendMessage}>

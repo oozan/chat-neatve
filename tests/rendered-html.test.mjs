@@ -72,6 +72,17 @@ test("keeps drafts device-local and provides in-chat search", async () => {
   assert.doesNotMatch(route, /draft/);
 });
 
+test("stores reply context inside encrypted message content", async () => {
+  const [client, route] = await Promise.all([
+    readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/messages/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(client, /\[message\].*replyTo/);
+  assert.match(client, /encryptMessage\(secureChat\.id, storedContent\)/);
+  assert.doesNotMatch(route, /replyTo/);
+});
+
 test("adds baseline browser security headers", async () => {
   const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
   assert.match(worker, /x-content-type-options/);
