@@ -204,7 +204,9 @@ button { color: inherit; }
 .bubble:hover .add-reaction, .bubble:hover .reply-message { opacity: 1; transform: translateY(-50%) scale(1); }
 .mine .bubble { border-radius: 15px 15px 4px 15px; background: #d8f0e6; }
 .bubble p { margin: 0; color: #26332f; font-size: 13px; line-height: 1.47; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble p.deleted-message { color: #89938f; font-style: italic; }
 .message-meta { display: flex; justify-content: flex-end; gap: 4px; margin-top: 3px; color: #89938f; font-size: 9px; }
+.message-meta i { font-style: normal; }
 .message-meta b { color: var(--green); letter-spacing: -2px; }
 .message-meta b.failed { color: #bc5145; letter-spacing: 0; }
 .retry-message { width: 17px; height: 17px; padding: 0; border: 0; border-radius: 50%; background: #bc5145; color: #fff; font-size: 10px; font-weight: 900; cursor: pointer; }
@@ -213,6 +215,12 @@ button { color: inherit; }
 .mine .add-reaction { right: auto; left: -36px; }
 .reply-message { position: absolute; top: 50%; right: -68px; display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: rgba(255,255,255,.95); box-shadow: 0 3px 12px rgba(30,48,42,.1); color: #73807b; cursor: pointer; opacity: 0; transform: translateY(-50%) scale(.8); transition: .15s ease; }
 .mine .reply-message { right: auto; left: -68px; }
+.message-more { position: absolute; z-index: 5; top: -10px; right: -10px; min-width: 28px; height: 24px; padding: 0 6px; border: 1px solid var(--line); border-radius: 9px; background: #fff; box-shadow: 0 3px 10px rgba(30,48,42,.12); color: #74807c; font-size: 10px; cursor: pointer; opacity: 0; transition: opacity .15s ease; }
+.bubble:hover .message-more, .message-more:focus { opacity: 1; }
+.message-action-menu { position: absolute; z-index: 9; top: 19px; right: -5px; display: grid; min-width: 132px; gap: 2px; padding: 5px; border: 1px solid var(--line); border-radius: 11px; background: #fff; box-shadow: 0 12px 30px rgba(28,49,41,.18); }
+.message-action-menu button { padding: 8px 9px; border: 0; border-radius: 7px; background: transparent; color: #53615c; font-size: 10px; font-weight: 700; text-align: left; cursor: pointer; }
+.message-action-menu button:hover { background: #eef4f1; }
+.message-action-menu button.danger { color: #ac4d43; }
 .reaction-picker { position: absolute; z-index: 8; right: -8px; bottom: calc(100% + 7px); display: flex; gap: 2px; padding: 6px; border: 1px solid var(--line); border-radius: 16px; background: #fff; box-shadow: 0 10px 28px rgba(28,49,41,.17); animation: reaction-pop .16s ease-out; }
 .mine .reaction-picker { right: 0; }
 .reaction-picker button { display: grid; width: 29px; height: 29px; place-items: center; border: 0; border-radius: 9px; background: transparent; font-size: 17px; cursor: pointer; transition: transform .12s ease, background .12s ease; }
@@ -325,6 +333,9 @@ button { color: inherit; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
 .modal-actions button { min-height: 40px; padding: 0 16px; border: 0; border-radius: 11px; background: #eef2f0; color: #66736e; font-size: 12px; font-weight: 800; cursor: pointer; }
 .modal-actions button.primary { background: var(--green); color: #fff; }
+.confirm-modal { width: min(100%, 390px); }
+.modal-icon.danger-icon { background: #f8e8e5; color: #b75348; font-weight: 900; }
+.modal-actions button.danger-action { background: #b75348; color: #fff; }
 .modal-actions button:disabled { cursor: not-allowed; opacity: .45; }
 
 @media (max-width: 1120px) {
@@ -352,6 +363,7 @@ button { color: inherit; }
   .media-picker { right: 8px; bottom: 67px; width: calc(100vw - 16px); max-width: 380px; max-height: calc(100dvh - 150px); }
   .add-reaction, .reply-message { opacity: 1; transform: translateY(-50%) scale(.85); }
   .reply-message, .mine .reply-message { top: 0; right: 6px; left: auto; }
+  .message-more { top: -9px; right: -8px; opacity: 1; }
   .gif-message { width: min(230px, 65vw); height: 135px; }
   .message-space::before { left: 0; }
   .info-panel { width: min(90%, 320px); }

@@ -55,8 +55,8 @@ test("encrypts reaction events before persistence", async () => {
     readFile(new URL("../app/api/messages/route.ts", import.meta.url), "utf8"),
   ]);
 
-  assert.match(client, /encryptMessage\(chat\.id, `\[reaction\]/);
-  assert.match(client, /persistEncryptedReaction/);
+  assert.match(client, /`\[reaction\].*targetId/);
+  assert.match(client, /persistEncryptedControl/);
   assert.doesNotMatch(route, /reaction|emoji/);
 });
 
@@ -81,6 +81,18 @@ test("stores reply context inside encrypted message content", async () => {
   assert.match(client, /\[message\].*replyTo/);
   assert.match(client, /encryptMessage\(secureChat\.id, storedContent\)/);
   assert.doesNotMatch(route, /replyTo/);
+});
+
+test("syncs edits and deletions as encrypted control events", async () => {
+  const [client, route] = await Promise.all([
+    readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/messages/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(client, /`\[edit\].*targetId/);
+  assert.match(client, /`\[delete\].*targetId/);
+  assert.match(client, /persistEncryptedControl/);
+  assert.doesNotMatch(route, /\bedit\b|\bdelete\b|targetId/);
 });
 
 test("adds baseline browser security headers", async () => {

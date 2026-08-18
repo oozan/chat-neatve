@@ -15,6 +15,8 @@ type Message = {
   status?: "read" | "sent" | "failed";
   replyTo?: string;
   reactions?: string[];
+  edited?: boolean;
+  deleted?: boolean;
 };
 
 type OnlineGif = {
@@ -29,7 +31,9 @@ type OnlineGif = {
 
 type DecodedStoredContent =
   | { recordType: "message"; text: string; gif?: string; gifUrl?: string; gifPreviewUrl?: string; replyTo?: string }
-  | { recordType: "reaction"; targetId: string; emoji: string; active: boolean };
+  | { recordType: "reaction"; targetId: string; emoji: string; active: boolean }
+  | { recordType: "edit"; targetId: string; text: string }
+  | { recordType: "delete"; targetId: string };
 
 type Chat = {
   id: string;
@@ -164,6 +168,24 @@ const gifs = [
 ];
 
 function decodeStoredMessage(value: string): DecodedStoredContent {
+  if (value.startsWith("[edit]")) {
+    try {
+      const data = JSON.parse(value.slice(6)) as { targetId?: unknown; text?: unknown };
+      if (typeof data.targetId === "string" && typeof data.text === "string" && data.text.trim()) {
+        return { recordType: "edit", targetId: data.targetId, text: data.text };
+      }
+    } catch {
+      // Invalid encrypted control records are ignored as ordinary messages below.
+    }
+  }
+  if (value.startsWith("[delete]")) {
+    try {
+      const data = JSON.parse(value.slice(8)) as { targetId?: unknown };
+      if (typeof data.targetId === "string") return { recordType: "delete", targetId: data.targetId };
+    } catch {
+      // Invalid encrypted control records are ignored as ordinary messages below.
+    }
+  }
   if (value.startsWith("[reaction]")) {
     try {
       const data = JSON.parse(value.slice(10)) as { targetId?: unknown; emoji?: unknown; active?: unknown };
@@ -223,6 +245,9 @@ export function ChatApp() {
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [highlightedMessageId, setHighlightedMessageId] = useState<Message["id"] | null>(null);
   const [replyingTo, setReplyingTo] = useState<{ id: Message["id"]; text: string } | null>(null);
+  const [messageMenuTarget, setMessageMenuTarget] = useState<Message["id"] | null>(null);
+  const [editingMessage, setEditingMessage] = useState<{ id: Message["id"]; originalText: string; previousDraft: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const chatSearchRef = useRef<HTMLInputElement>(null);
   const messageSpaceRef = useRef<HTMLDivElement>(null);
@@ -257,11 +282,17 @@ export function ChatApp() {
         setReactionTarget(null);
         setShowChatSearch(false);
         setReplyingTo(null);
+        setMessageMenuTarget(null);
+        setDeleteTarget(null);
+        if (editingMessage) {
+          setDraft(editingMessage.previousDraft);
+          setEditingMessage(null);
+        }
       }
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, []);
+  }, [editingMessage]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -384,9 +415,15 @@ export function ChatApp() {
           });
           let messages = restored.length ? [...chat.messages, ...restored] : chat.messages;
           for (const record of decrypted) {
-            if (record.content.recordType !== "reaction") continue;
+            if (record.content.recordType === "message") continue;
             messages = messages.map((message) => {
               if (String(message.id) !== record.content.targetId) return message;
+              if (record.content.recordType === "edit") {
+                return message.deleted ? message : { ...message, text: record.content.text, edited: true };
+              }
+              if (record.content.recordType === "delete") {
+                return { ...message, text: "", gif: undefined, gifUrl: undefined, gifPreviewUrl: undefined, replyTo: undefined, reactions: [], deleted: true };
+              }
               const reactions = message.reactions ?? [];
               return {
                 ...message,
@@ -423,6 +460,8 @@ export function ChatApp() {
     setShowChatSearch(false);
     setChatSearchQuery("");
     setReplyingTo(null);
+    setMessageMenuTarget(null);
+    setEditingMessage(null);
     setChats((current) => current.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)));
   }
 
@@ -529,6 +568,24 @@ export function ChatApp() {
     const text = draft.trim();
     if (!text) return;
 
+    if (editingMessage && typeof editingMessage.id === "string") {
+      const editing = editingMessage;
+      setChats((current) => current.map((chat) => chat.id === activeChat.id ? {
+        ...chat,
+        messages: chat.messages.map((message) => message.id === editing.id ? { ...message, text, edited: true } : message),
+      } : chat));
+      setDraft(editing.previousDraft);
+      setEditingMessage(null);
+      void persistEncryptedControl(activeChat, `[edit]${JSON.stringify({ targetId: editing.id, text })}`).catch(() => {
+        setChats((current) => current.map((chat) => chat.id === activeChat.id ? {
+          ...chat,
+          messages: chat.messages.map((message) => message.id === editing.id ? { ...message, text: editing.originalText, edited: false } : message),
+        } : chat));
+        flash("Message edit could not be synced securely");
+      });
+      return;
+    }
+
     const message: Message = {
       id: `local-${crypto.randomUUID()}`,
       text,
@@ -587,14 +644,14 @@ export function ChatApp() {
     void persistEncryptedMessage(activeChat, message);
   }
 
-  async function persistEncryptedReaction(chat: Chat, messageId: string, reaction: string, active: boolean) {
-    const encrypted = await encryptMessage(chat.id, `[reaction]${JSON.stringify({ targetId: messageId, emoji: reaction, active })}`);
+  async function persistEncryptedControl(chat: Chat, content: string) {
+    const encrypted = await encryptMessage(chat.id, content);
     const response = await fetch("/api/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-whisper-device-id": getDeviceId() },
       body: JSON.stringify({ conversationId: chat.id, ...encrypted }),
     });
-    if (!response.ok) throw new Error("Reaction storage failed");
+    if (!response.ok) throw new Error("Encrypted control event storage failed");
   }
 
   function reactToMessage(messageId: Message["id"], reaction: string) {
@@ -610,7 +667,7 @@ export function ChatApp() {
     setReactionTarget(null);
 
     if (activeChat.persisted && typeof messageId === "string" && !messageId.startsWith("local-")) {
-      void persistEncryptedReaction(activeChat, messageId, reaction, active).catch(() => {
+      void persistEncryptedControl(activeChat, `[reaction]${JSON.stringify({ targetId: messageId, emoji: reaction, active })}`).catch(() => {
         setChats((current) => current.map((chat) => chat.id === activeChat.id ? {
           ...chat,
           messages: chat.messages.map((message) => message.id === messageId
@@ -620,6 +677,38 @@ export function ChatApp() {
         flash("Reaction could not be synced securely");
       });
     }
+  }
+
+  function startEditingMessage(message: Message) {
+    setEditingMessage({ id: message.id, originalText: message.text, previousDraft: draft });
+    setDraft(message.text);
+    setReplyingTo(null);
+    setMessageMenuTarget(null);
+  }
+
+  function cancelEditingMessage() {
+    if (editingMessage) setDraft(editingMessage.previousDraft);
+    setEditingMessage(null);
+  }
+
+  function deleteMessage(message: Message) {
+    if (typeof message.id !== "string") return;
+    const original = message;
+    setDeleteTarget(null);
+    setMessageMenuTarget(null);
+    setChats((current) => current.map((chat) => chat.id === activeChat.id ? {
+      ...chat,
+      messages: chat.messages.map((entry) => entry.id === message.id
+        ? { ...entry, text: "", gif: undefined, gifUrl: undefined, gifPreviewUrl: undefined, replyTo: undefined, reactions: [], deleted: true }
+        : entry),
+    } : chat));
+    void persistEncryptedControl(activeChat, `[delete]${JSON.stringify({ targetId: message.id })}`).catch(() => {
+      setChats((current) => current.map((chat) => chat.id === activeChat.id ? {
+        ...chat,
+        messages: chat.messages.map((entry) => entry.id === message.id ? original : entry),
+      } : chat));
+      flash("Message deletion could not be synced securely");
+    });
   }
 
   function flash(message: string) {
@@ -732,6 +821,7 @@ export function ChatApp() {
               >
                 {!message.mine && <span className={`mini-avatar avatar-${activeChat.color}`}>{activeChat.initials}</span>}
                 <div className="bubble">
+                  {message.deleted ? <p className="deleted-message">Message deleted</p> : <>
                   {message.replyTo && <div className="reply-quote">{message.replyTo}</div>}
                   {message.gifUrl ? (
                     <div className="online-gif-message">
@@ -743,20 +833,31 @@ export function ChatApp() {
                     const gif = gifs.find((item) => item.id === message.gif) ?? gifs[0];
                     return <div className={`gif-message gif-${gif.id}`} style={{ "--gif-a": gif.colors[0], "--gif-b": gif.colors[1] } as CSSProperties}><span>{gif.emoji}</span><strong>{gif.label}</strong><i>GIF</i></div>;
                   })() : <p>{message.text}</p>}
+                  </>}
                   <span className="message-meta">
+                    {message.edited && !message.deleted && <i>edited</i>}
                     {message.time}
                     {message.mine && (message.status === "failed" ? (
                       <button className="retry-message" aria-label="Retry sending message" title="Retry" onClick={() => void persistEncryptedMessage(activeChat, message)}>!</button>
                     ) : <b aria-label={message.status === "read" ? "Read" : "Sent"}>{message.status === "read" ? "✓✓" : "✓"}</b>)}
                   </span>
-                  <button className="add-reaction" aria-label="React to message" onClick={() => setReactionTarget(reactionTarget === message.id ? null : message.id)}>☺</button>
-                  <button className="reply-message" aria-label="Reply to message" onClick={() => { setReplyingTo({ id: message.id, text: message.text }); setReactionTarget(null); }}>↩</button>
-                  {reactionTarget === message.id && (
+                  {!message.deleted && <button className="add-reaction" aria-label="React to message" onClick={() => setReactionTarget(reactionTarget === message.id ? null : message.id)}>☺</button>}
+                  {!message.deleted && <button className="reply-message" aria-label="Reply to message" onClick={() => { setReplyingTo({ id: message.id, text: message.text }); setReactionTarget(null); }}>↩</button>}
+                  {message.mine && activeChat.persisted && typeof message.id === "string" && !message.id.startsWith("local-") && !message.deleted && (
+                    <>
+                      <button className="message-more" aria-label="Message options" onClick={() => setMessageMenuTarget(messageMenuTarget === message.id ? null : message.id)}>•••</button>
+                      {messageMenuTarget === message.id && <div className="message-action-menu">
+                        {!message.gif && !message.gifUrl && <button onClick={() => startEditingMessage(message)}>Edit message</button>}
+                        <button className="danger" onClick={() => { setDeleteTarget(message); setMessageMenuTarget(null); }}>Delete message</button>
+                      </div>}
+                    </>
+                  )}
+                  {reactionTarget === message.id && !message.deleted && (
                     <div className="reaction-picker">
                       {["❤️", "😂", "😮", "😢", "🔥", "👍", "👎", "🎉"].map((reaction) => <button key={reaction} onClick={() => reactToMessage(message.id, reaction)}>{reaction}</button>)}
                     </div>
                   )}
-                  {!!message.reactions?.length && <div className="message-reactions">{message.reactions.map((reaction) => <button key={reaction} onClick={() => reactToMessage(message.id, reaction)}>{reaction} <span>1</span></button>)}</div>}
+                  {!message.deleted && !!message.reactions?.length && <div className="message-reactions">{message.reactions.map((reaction) => <button key={reaction} onClick={() => reactToMessage(message.id, reaction)}>{reaction} <span>1</span></button>)}</div>}
                 </div>
               </div>
             ))}
@@ -796,6 +897,13 @@ export function ChatApp() {
               <span>Replying to</span>
               <strong>{replyingTo.text}</strong>
               <button onClick={() => setReplyingTo(null)} aria-label="Cancel reply">×</button>
+            </div>
+          )}
+          {editingMessage && (
+            <div className="reply-composer edit-composer" role="status">
+              <span>Editing message</span>
+              <strong>{editingMessage.originalText}</strong>
+              <button onClick={cancelEditingMessage} aria-label="Cancel editing">×</button>
             </div>
           )}
           <form className="composer" onSubmit={sendMessage}>
@@ -846,6 +954,20 @@ export function ChatApp() {
                 <button className="primary" type="submit" disabled={!newChatName.trim() || creatingChat}>{creatingChat ? "Creating…" : "Create chat"}</button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setDeleteTarget(null)}>
+          <section className="new-chat-modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-message-title">
+            <span className="modal-icon danger-icon">!</span>
+            <h2 id="delete-message-title">Delete this message?</h2>
+            <p>It will be replaced by a deleted-message marker after encrypted synchronization.</p>
+            <div className="modal-actions">
+              <button type="button" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="danger-action" type="button" onClick={() => deleteMessage(deleteTarget)}>Delete message</button>
+            </div>
           </section>
         </div>
       )}
