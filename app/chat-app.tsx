@@ -61,6 +61,7 @@ const initialChats: Chat[] = [
     unread: 2,
     online: true,
     pinned: true,
+    kind: "direct",
     color: "coral",
     messages: [
       { id: 1, text: "Hey! Did you make it to Lisbon?", time: "10:31" },
@@ -95,6 +96,7 @@ const initialChats: Chat[] = [
     time: "09:18",
     unread: 5,
     pinned: true,
+    kind: "group",
     color: "blue",
     messages: [
       { id: 1, text: "Morning team — the new prototype is live.", time: "09:12" },
@@ -108,6 +110,7 @@ const initialChats: Chat[] = [
     preview: "Voice message · 0:24",
     time: "Yesterday",
     color: "amber",
+    kind: "direct",
     messages: [
       { id: 1, text: "Voice message · 0:24", time: "18:06" },
       { id: 2, text: "I'll listen on the way home.", time: "18:10", mine: true, status: "read" },
@@ -120,6 +123,7 @@ const initialChats: Chat[] = [
     preview: "Photo",
     time: "Yesterday",
     muted: true,
+    kind: "group",
     color: "violet",
     messages: [{ id: 1, text: "Photo · Weekend plans are officially happening!", time: "17:44" }],
   },
@@ -130,6 +134,7 @@ const initialChats: Chat[] = [
     preview: "Train tickets.pdf",
     time: "Mon",
     color: "cyan",
+    kind: "saved",
     messages: [
       { id: 1, text: "Train tickets.pdf", time: "08:15", mine: true, status: "sent" },
       { id: 2, text: "Ideas for the autumn launch", time: "08:17", mine: true, status: "sent" },
@@ -142,6 +147,7 @@ const initialChats: Chat[] = [
     preview: "See you Thursday!",
     time: "Sun",
     color: "green",
+    kind: "direct",
     messages: [{ id: 1, text: "See you Thursday!", time: "16:22" }],
   },
 ];
@@ -166,6 +172,21 @@ const gifs = [
   { id: "hello", label: "Hello!", emoji: "👋", colors: ["#168568", "#8bcf8e"] },
   { id: "coffee", label: "Coffee?", emoji: "☕", colors: ["#765448", "#c99b73"] },
 ];
+
+function withChatPreferences(chat: Chat): Chat {
+  try {
+    const stored = localStorage.getItem(`whisper-chat-preferences:${chat.id}`);
+    if (!stored) return chat;
+    const preferences = JSON.parse(stored) as { pinned?: unknown; muted?: unknown };
+    return {
+      ...chat,
+      pinned: typeof preferences.pinned === "boolean" ? preferences.pinned : chat.pinned,
+      muted: typeof preferences.muted === "boolean" ? preferences.muted : chat.muted,
+    };
+  } catch {
+    return chat;
+  }
+}
 
 function decodeStoredMessage(value: string): DecodedStoredContent {
   if (value.startsWith("[edit]")) {
@@ -226,6 +247,7 @@ export function ChatApp() {
   const [chats, setChats] = useState(initialChats);
   const [activeId, setActiveId] = useState("maya");
   const [query, setQuery] = useState("");
+  const [conversationFilter, setConversationFilter] = useState<"all" | "groups" | "saved">("all");
   const [draft, setDraft] = useState("");
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [pickerTab, setPickerTab] = useState<"emoji" | "gif">("emoji");
@@ -255,8 +277,11 @@ export function ChatApp() {
 
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
   const visibleChats = useMemo(
-    () => chats.filter((chat) => chat.name.toLowerCase().includes(query.toLowerCase())),
-    [chats, query],
+    () => chats
+      .filter((chat) => conversationFilter === "all" || (conversationFilter === "groups" ? chat.kind === "group" : chat.kind === "saved"))
+      .filter((chat) => chat.name.toLowerCase().includes(query.toLowerCase()))
+      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))),
+    [chats, conversationFilter, query],
   );
   const chatSearchResults = useMemo(() => {
     const search = chatSearchQuery.trim().toLocaleLowerCase();
@@ -298,6 +323,7 @@ export function ChatApp() {
     const timer = window.setTimeout(() => {
       const stored = localStorage.getItem(`whisper-draft:${initialChats[0].id}`);
       if (stored) setDraft(stored);
+      setChats((current) => current.map(withChatPreferences));
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -323,7 +349,7 @@ export function ChatApp() {
         if (cancelled) return;
         setChats((current) => {
           const known = new Set(current.map((chat) => chat.id));
-          const restored = (payload.conversations ?? []).filter((chat) => !known.has(chat.id)).map((chat, index): Chat => ({
+          const restored = (payload.conversations ?? []).filter((chat) => !known.has(chat.id)).map((chat, index): Chat => withChatPreferences({
             id: chat.id,
             name: chat.title,
             initials: chat.title.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(),
@@ -711,6 +737,17 @@ export function ChatApp() {
     });
   }
 
+  function updateChatPreference(preference: "pinned" | "muted") {
+    const nextValue = !activeChat[preference];
+    const nextPreferences = {
+      pinned: preference === "pinned" ? nextValue : Boolean(activeChat.pinned),
+      muted: preference === "muted" ? nextValue : Boolean(activeChat.muted),
+    };
+    setChats((current) => current.map((chat) => chat.id === activeChat.id ? { ...chat, [preference]: nextValue } : chat));
+    localStorage.setItem(`whisper-chat-preferences:${activeChat.id}`, JSON.stringify(nextPreferences));
+    flash(preference === "pinned" ? (nextValue ? "Conversation pinned" : "Conversation unpinned") : (nextValue ? "Notifications muted" : "Notifications enabled"));
+  }
+
   function flash(message: string) {
     setNotice(message);
     window.setTimeout(() => setNotice(null), 2200);
@@ -735,14 +772,14 @@ export function ChatApp() {
         </div>
 
         <nav className="filter-tabs" aria-label="Conversation filters">
-          <button className={!query ? "active" : ""} onClick={() => setQuery("")}>All <span>{chats.length}</span></button>
-          <button onClick={() => setQuery("Crew")}>Groups</button>
-          <button onClick={() => setQuery("Saved")}>Saved</button>
+          <button className={conversationFilter === "all" ? "active" : ""} onClick={() => setConversationFilter("all")}>All <span>{chats.length}</span></button>
+          <button className={conversationFilter === "groups" ? "active" : ""} onClick={() => setConversationFilter("groups")}>Groups</button>
+          <button className={conversationFilter === "saved" ? "active" : ""} onClick={() => setConversationFilter("saved")}>Saved</button>
         </nav>
 
         <div className="conversation-list">
           {visibleChats.length === 0 ? (
-            <div className="empty-list">No conversations match “{query}”.</div>
+            <div className="empty-list">{query ? `No conversations match “${query}”.` : conversationFilter === "groups" ? "No group conversations yet." : "No saved conversations yet."}</div>
           ) : visibleChats.map((chat) => (
             <button
               key={chat.id}
@@ -925,7 +962,8 @@ export function ChatApp() {
           <h2>{activeChat.name}</h2>
           <p className="info-status">{activeChat.online ? "online" : "last seen recently"}</p>
           <div className="quick-actions">
-            <button onClick={() => flash("Notifications muted")}><span>♩</span>Mute</button>
+            <button onClick={() => updateChatPreference("muted")}><span>{activeChat.muted ? "♪" : "♩"}</span>{activeChat.muted ? "Unmute" : "Mute"}</button>
+            <button onClick={() => updateChatPreference("pinned")}><span>◆</span>{activeChat.pinned ? "Unpin" : "Pin"}</button>
             <button onClick={() => flash("Secure call started")}><span>♢</span>Call</button>
             <button onClick={openChatSearch}><span>⌕</span>Search</button>
           </div>

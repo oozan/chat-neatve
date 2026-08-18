@@ -95,6 +95,16 @@ test("syncs edits and deletions as encrypted control events", async () => {
   assert.doesNotMatch(route, /\bedit\b|\bdelete\b|targetId/);
 });
 
+test("persists device preferences and applies real conversation filters", async () => {
+  const client = await readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8");
+
+  assert.match(client, /whisper-chat-preferences:/);
+  assert.match(client, /conversationFilter === "groups"/);
+  assert.match(client, /chat\.kind === "saved"/);
+  assert.match(client, /updateChatPreference\("pinned"\)/);
+  assert.match(client, /updateChatPreference\("muted"\)/);
+});
+
 test("adds baseline browser security headers", async () => {
   const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
   assert.match(worker, /x-content-type-options/);

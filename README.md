@@ -13,6 +13,7 @@ Whisper is a responsive Telegram-inspired chat application with client-side mess
 - Per-conversation drafts kept locally on the device
 - Encrypted message replies with restored quote context
 - Encrypted message editing and synchronized deletion markers
+- Working group/saved filters plus device-persisted pin and mute preferences
 - Optimistic sending with delivered, read, and failed states
 - AES-256-GCM encryption in the browser before network transmission
 - Non-exportable conversation keys stored in IndexedDB on the device
