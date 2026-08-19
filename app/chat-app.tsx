@@ -276,10 +276,12 @@ export function ChatApp() {
   const [compactMode, setCompactMode] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
+  const [showScrollLatest, setShowScrollLatest] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const chatSearchRef = useRef<HTMLInputElement>(null);
   const messageSpaceRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef(new Map<string, HTMLDivElement>());
+  const userAwayFromBottomRef = useRef(false);
 
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
   const visibleChats = useMemo(
@@ -489,8 +491,24 @@ export function ChatApp() {
 
   useEffect(() => {
     const element = messageSpaceRef.current;
-    if (element) element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
+    if (element && !userAwayFromBottomRef.current) element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
   }, [activeChat.messages.length, activeId]);
+
+  function handleMessageScroll() {
+    const element = messageSpaceRef.current;
+    if (!element) return;
+    const awayFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight > 160;
+    userAwayFromBottomRef.current = awayFromBottom;
+    setShowScrollLatest(awayFromBottom);
+  }
+
+  function scrollToLatest() {
+    const element = messageSpaceRef.current;
+    if (!element) return;
+    userAwayFromBottomRef.current = false;
+    setShowScrollLatest(false);
+    element.scrollTo({ top: element.scrollHeight, behavior: reducedMotion ? "auto" : "smooth" });
+  }
 
   function selectChat(id: string) {
     const nextDraft = localStorage.getItem(`whisper-draft:${id}`) ?? "";
@@ -503,6 +521,8 @@ export function ChatApp() {
     setReplyingTo(null);
     setMessageMenuTarget(null);
     setEditingMessage(null);
+    userAwayFromBottomRef.current = false;
+    setShowScrollLatest(false);
     setChats((current) => current.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)));
   }
 
@@ -898,7 +918,7 @@ export function ChatApp() {
           <p><strong>Messages are end-to-end encrypted.</strong> No one outside this chat can read them.</p>
         </div>
 
-        <div className="message-space" ref={messageSpaceRef}>
+        <div className="message-space" ref={messageSpaceRef} onScroll={handleMessageScroll}>
           <div className="day-divider"><span>Today</span></div>
           <div className="messages" aria-live="polite">
             {activeChat.messages.map((message) => (
@@ -953,6 +973,7 @@ export function ChatApp() {
               </div>
             ))}
           </div>
+          {showScrollLatest && <button className="scroll-latest" onClick={scrollToLatest} aria-label="Scroll to latest message">↓ Newest</button>}
         </div>
 
         <div className="composer-zone">

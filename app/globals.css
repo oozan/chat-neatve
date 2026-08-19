@@ -200,6 +200,7 @@ button { color: inherit; }
   background-size: 36px 36px, 51px 51px;
 }
 .message-space::before { content: ""; position: fixed; inset: 112px 0 100px 380px; pointer-events: none; background: linear-gradient(180deg, rgba(255,255,255,.12), transparent 18%, transparent 80%, rgba(231,232,224,.4)); }
+.scroll-latest { position: sticky; z-index: 5; bottom: 15px; display: block; margin: -48px 22px 15px auto; padding: 8px 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--green); box-shadow: 0 6px 20px rgba(16,66,53,.22); color: #fff; font-size: 10px; font-weight: 800; cursor: pointer; }
 .messages { position: relative; z-index: 1; display: flex; max-width: 840px; min-height: calc(100% - 50px); margin: 0 auto; padding: 18px 32px 28px; flex-direction: column; justify-content: flex-end; gap: 8px; }
 .day-divider { position: sticky; z-index: 2; top: 12px; width: max-content; margin: 15px auto 0; }
 .day-divider span { display: block; padding: 6px 12px; border: 1px solid rgba(255,255,255,.8); border-radius: 12px; background: rgba(96,111,104,.62); box-shadow: 0 3px 12px rgba(38,54,48,.08); color: #fff; font-size: 10px; font-weight: 700; backdrop-filter: blur(8px); }

@@ -117,6 +117,8 @@ test("persists device preferences and applies real conversation filters", async 
   assert.match(client, /reduce-motion/);
   assert.match(client, /Keyboard shortcuts/);
   assert.match(client, /event\.key === "\/"/);
+  assert.match(client, /Scroll to latest message/);
+  assert.match(client, /userAwayFromBottomRef/);
 });
 
 test("adds baseline browser security headers", async () => {

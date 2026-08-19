@@ -15,6 +15,7 @@ The 0.2 release marks the first complete private-chat MVP: durable conversations
 - Conversation search, filtering, unread states, details, and message composer
 - Durable conversation creation and restoration across sessions
 - Automatic encrypted message synchronization with offline status and retry controls
+- A scroll-to-newest control that preserves the reader's place in long chats
 - Reactions persisted as encrypted control events rather than server-readable emoji metadata
 - Fast in-conversation message search with keyboard support
 - Discoverable keyboard shortcut guide for search and panel navigation
