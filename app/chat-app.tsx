@@ -45,6 +45,7 @@ type Chat = {
   online?: boolean;
   pinned?: boolean;
   muted?: boolean;
+  archived?: boolean;
   color: string;
   messages: Message[];
   kind?: "direct" | "group" | "saved";
@@ -177,11 +178,12 @@ function withChatPreferences(chat: Chat): Chat {
   try {
     const stored = localStorage.getItem(`whisper-chat-preferences:${chat.id}`);
     if (!stored) return chat;
-    const preferences = JSON.parse(stored) as { pinned?: unknown; muted?: unknown };
+    const preferences = JSON.parse(stored) as { pinned?: unknown; muted?: unknown; archived?: unknown };
     return {
       ...chat,
       pinned: typeof preferences.pinned === "boolean" ? preferences.pinned : chat.pinned,
       muted: typeof preferences.muted === "boolean" ? preferences.muted : chat.muted,
+      archived: typeof preferences.archived === "boolean" ? preferences.archived : chat.archived,
     };
   } catch {
     return chat;
@@ -247,7 +249,7 @@ export function ChatApp() {
   const [chats, setChats] = useState(initialChats);
   const [activeId, setActiveId] = useState("maya");
   const [query, setQuery] = useState("");
-  const [conversationFilter, setConversationFilter] = useState<"all" | "unread" | "groups" | "saved">("all");
+  const [conversationFilter, setConversationFilter] = useState<"all" | "unread" | "groups" | "saved" | "archived">("all");
   const [draft, setDraft] = useState("");
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [pickerTab, setPickerTab] = useState<"emoji" | "gif">("emoji");
@@ -278,7 +280,8 @@ export function ChatApp() {
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
   const visibleChats = useMemo(
     () => chats
-      .filter((chat) => conversationFilter === "all" || (conversationFilter === "unread" ? Boolean(chat.unread) : conversationFilter === "groups" ? chat.kind === "group" : chat.kind === "saved"))
+      .filter((chat) => conversationFilter === "archived" ? Boolean(chat.archived) : !chat.archived)
+      .filter((chat) => conversationFilter === "all" || conversationFilter === "archived" || (conversationFilter === "unread" ? Boolean(chat.unread) : conversationFilter === "groups" ? chat.kind === "group" : chat.kind === "saved"))
       .filter((chat) => chat.name.toLowerCase().includes(query.toLowerCase()))
       .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))),
     [chats, conversationFilter, query],
@@ -737,15 +740,16 @@ export function ChatApp() {
     });
   }
 
-  function updateChatPreference(preference: "pinned" | "muted") {
+  function updateChatPreference(preference: "pinned" | "muted" | "archived") {
     const nextValue = !activeChat[preference];
     const nextPreferences = {
       pinned: preference === "pinned" ? nextValue : Boolean(activeChat.pinned),
       muted: preference === "muted" ? nextValue : Boolean(activeChat.muted),
+      archived: preference === "archived" ? nextValue : Boolean(activeChat.archived),
     };
     setChats((current) => current.map((chat) => chat.id === activeChat.id ? { ...chat, [preference]: nextValue } : chat));
     localStorage.setItem(`whisper-chat-preferences:${activeChat.id}`, JSON.stringify(nextPreferences));
-    flash(preference === "pinned" ? (nextValue ? "Conversation pinned" : "Conversation unpinned") : (nextValue ? "Notifications muted" : "Notifications enabled"));
+    flash(preference === "pinned" ? (nextValue ? "Conversation pinned" : "Conversation unpinned") : preference === "muted" ? (nextValue ? "Notifications muted" : "Notifications enabled") : (nextValue ? "Conversation archived" : "Conversation restored"));
   }
 
   function flash(message: string) {
@@ -776,11 +780,12 @@ export function ChatApp() {
           <button className={conversationFilter === "unread" ? "active" : ""} onClick={() => setConversationFilter("unread")}>Unread <span>{chats.filter((chat) => Boolean(chat.unread)).length}</span></button>
           <button className={conversationFilter === "groups" ? "active" : ""} onClick={() => setConversationFilter("groups")}>Groups</button>
           <button className={conversationFilter === "saved" ? "active" : ""} onClick={() => setConversationFilter("saved")}>Saved</button>
+          <button className={conversationFilter === "archived" ? "active" : ""} onClick={() => setConversationFilter("archived")}>Archived</button>
         </nav>
 
         <div className="conversation-list">
           {visibleChats.length === 0 ? (
-            <div className="empty-list">{query ? `No conversations match “${query}”.` : conversationFilter === "unread" ? "You are all caught up." : conversationFilter === "groups" ? "No group conversations yet." : "No saved conversations yet."}</div>
+            <div className="empty-list">{query ? `No conversations match “${query}”.` : conversationFilter === "unread" ? "You are all caught up." : conversationFilter === "groups" ? "No group conversations yet." : conversationFilter === "archived" ? "No archived conversations." : "No saved conversations yet."}</div>
           ) : visibleChats.map((chat) => (
             <button
               key={chat.id}
@@ -973,6 +978,7 @@ export function ChatApp() {
             <p>Messages and calls are secured with keys stored on your devices.</p>
             <button onClick={() => flash("Safety number copied")}>View safety number</button>
           </div>
+          <button className="archive-chat-action" onClick={() => updateChatPreference("archived")}>{activeChat.archived ? "Restore conversation" : "Archive conversation"}</button>
           <div className="media-row"><strong>Shared media</strong><button onClick={() => flash("All shared media")}>View all</button></div>
           <div className="media-grid"><span>Lisbon</span><span>Notes</span><span>4 files</span></div>
         </aside>

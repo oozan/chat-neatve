@@ -156,6 +156,8 @@ button { color: inherit; }
 
 .privacy-footer { position: absolute; right: 0; bottom: 0; left: 0; padding: 15px; border-top: 1px solid #eff1f0; background: rgba(255,255,255,.96); color: #98a09d; font-size: 10px; text-align: center; }
 .privacy-footer span { color: var(--green); font-size: 14px; }
+.archive-chat-action { width: 100%; margin: 12px 0; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font-weight: 700; cursor: pointer; }
+.archive-chat-action:hover { border-color: var(--green); color: var(--green-deep); }
 
 .chat-panel { position: relative; display: flex; flex: 1; min-width: 0; flex-direction: column; background: var(--cream); }
 .chat-header { position: relative; z-index: 4; flex: 0 0 76px; }
