@@ -2,9 +2,9 @@
 
 Whisper is a responsive Telegram-inspired chat application with client-side message encryption and durable ciphertext storage.
 
-## 0.2 milestone
+## 0.3 milestone
 
-The 0.2 release marks the first complete private-chat MVP: durable conversations, encrypted messages and control events, replies, reactions, editing, deletion markers, message search, draft recovery, and working conversation preferences are implemented and covered by the automated security-boundary checks.
+The 0.3 release turns the private-chat MVP into a more complete daily-use experience: unread and archive workflows, message copying, local exports, persistent themes and density controls, reduced motion, keyboard guidance, accessible selected states, and long-chat position preservation now complement the encrypted messaging foundation. The build and automated security-boundary checks cover the release.
 
 ## What works
 
