@@ -111,6 +111,8 @@ test("persists device preferences and applies real conversation filters", async 
   assert.match(client, /Copy message/);
   assert.match(client, /whisper-theme/);
   assert.match(client, /theme-dark/);
+  assert.match(client, /whisper-density/);
+  assert.match(client, /compact-mode/);
 });
 
 test("adds baseline browser security headers", async () => {

@@ -159,6 +159,9 @@ button { color: inherit; }
 .privacy-footer span { color: var(--green); font-size: 14px; }
 .archive-chat-action { width: 100%; margin: 12px 0; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font-weight: 700; cursor: pointer; }
 .archive-chat-action:hover { border-color: var(--green); color: var(--green-deep); }
+.preference-actions { display: grid; gap: 7px; margin: 12px 0; }
+.preference-actions button { display: flex; justify-content: space-between; padding: 10px 11px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--muted); font-size: 10px; cursor: pointer; }
+.preference-actions strong { color: var(--green); }
 
 .chat-panel { position: relative; display: flex; flex: 1; min-width: 0; flex-direction: column; background: var(--cream); }
 .chat-header { position: relative; z-index: 4; flex: 0 0 76px; }
@@ -356,6 +359,13 @@ button { color: inherit; }
 .theme-dark .composer-zone, .theme-dark .encryption-banner { background: rgba(20,32,28,.97); }
 .theme-dark .search-wrap kbd, .theme-dark .emoji-categories button.active { border-color: #3a4c46; background: #283832; }
 .theme-dark .emoji-categories, .theme-dark .gif-search { background: #202f2a; }
+.compact-mode .sidebar-header, .compact-mode .chat-header { height: 64px; }
+.compact-mode .conversation { gap: 9px; padding: 6px 9px; }
+.compact-mode .conversation .avatar { width: 38px; height: 38px; border-radius: 12px; }
+.compact-mode .conversation-preview { margin-top: 3px; }
+.compact-mode .messages { gap: 4px; padding-block: 12px 20px; }
+.compact-mode .bubble { padding: 7px 11px 5px; }
+.compact-mode .bubble p { font-size: 12px; }
 
 @media (max-width: 1120px) {
   .sidebar { flex-basis: 340px; }
