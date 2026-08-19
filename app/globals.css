@@ -25,6 +25,7 @@ body {
 
 button, input { font: inherit; }
 button { color: inherit; }
+button:focus-visible, input:focus-visible { outline: 3px solid rgba(14,124,102,.38); outline-offset: 2px; }
 
 .app-shell {
   display: flex;
@@ -351,6 +352,7 @@ button { color: inherit; }
 .shortcut-list div { display: flex; align-items: center; justify-content: space-between; padding: 10px 11px; border-radius: 10px; background: var(--paper); color: var(--muted); font-size: 11px; }
 .shortcut-list kbd { padding: 4px 7px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); font-size: 10px; }
 .theme-dark .shortcut-list kbd { background: #283832; }
+.theme-dark button:focus-visible, .theme-dark input:focus-visible { outline-color: rgba(91,210,176,.58); }
 
 .theme-dark { --ink: #e8f0ed; --muted: #96a6a0; --line: #31433d; --paper: #16221e; --cream: #101a17; --green-soft: #173f35; }
 .theme-dark .sidebar, .theme-dark .sidebar-header, .theme-dark .chat-header, .theme-dark .privacy-footer, .theme-dark .info-panel, .theme-dark .chat-search-panel, .theme-dark .media-picker, .theme-dark .new-chat-modal { background: #182520; }

@@ -110,7 +110,7 @@ test("persists device preferences and applies real conversation filters", async 
   assert.match(client, /navigator\.clipboard\.writeText\(message\.text\)/);
   assert.match(client, /Copy message/);
   assert.match(client, /whisper-theme/);
-  assert.match(client, /theme-dark/);
+  assert.match(client, /theme-\$\{theme\}/);
   assert.match(client, /whisper-density/);
   assert.match(client, /compact-mode/);
   assert.match(client, /whisper-reduced-motion/);
@@ -122,6 +122,9 @@ test("persists device preferences and applies real conversation filters", async 
   assert.match(client, /Export conversation/);
   assert.match(client, /application\/json/);
   assert.match(client, /URL\.createObjectURL/);
+  assert.match(client, /aria-current=/);
+  assert.match(client, /aria-pressed=/);
+  assert.match(client, /aria-live="polite"/);
 });
 
 test("adds baseline browser security headers", async () => {

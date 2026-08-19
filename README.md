@@ -12,6 +12,7 @@ The 0.2 release marks the first complete private-chat MVP: durable conversations
 - Device-persisted light and dark appearance themes
 - Comfortable and compact chat density preferences
 - A persistent reduced-motion control in addition to system motion preferences
+- Visible keyboard focus, announced sync status, and semantic selected states
 - Conversation search, filtering, unread states, details, and message composer
 - Durable conversation creation and restoration across sessions
 - Automatic encrypted message synchronization with offline status and retry controls

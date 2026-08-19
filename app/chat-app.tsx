@@ -845,9 +845,9 @@ export function ChatApp() {
           <button className="avatar avatar-me" aria-label="Open profile" onClick={() => flash("Profile settings are ready for the next step")}>OZ</button>
           <div className="brand-lockup">
             <strong>Whisper</strong>
-            <span><i className={`status-dot status-${syncState}`} /> {syncState === "online" ? "encrypted · synced" : syncState === "syncing" ? "connecting securely…" : "offline · messages queued"}</span>
+            <span role="status" aria-live="polite"><i className={`status-dot status-${syncState}`} /> {syncState === "online" ? "encrypted · synced" : syncState === "syncing" ? "connecting securely…" : "offline · messages queued"}</span>
           </div>
-          <button className="icon-button theme-toggle" aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`} onClick={toggleTheme}>{theme === "light" ? "☾" : "☀"}</button>
+          <button className="icon-button theme-toggle" aria-pressed={theme === "dark"} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`} onClick={toggleTheme}>{theme === "light" ? "☾" : "☀"}</button>
           <button className="icon-button new-chat" aria-label="Start new chat" onClick={() => setShowNewChat(true)}>＋</button>
         </header>
 
@@ -858,11 +858,11 @@ export function ChatApp() {
         </div>
 
         <nav className="filter-tabs" aria-label="Conversation filters">
-          <button className={conversationFilter === "all" ? "active" : ""} onClick={() => setConversationFilter("all")}>All <span>{chats.length}</span></button>
-          <button className={conversationFilter === "unread" ? "active" : ""} onClick={() => setConversationFilter("unread")}>Unread <span>{chats.filter((chat) => Boolean(chat.unread)).length}</span></button>
-          <button className={conversationFilter === "groups" ? "active" : ""} onClick={() => setConversationFilter("groups")}>Groups</button>
-          <button className={conversationFilter === "saved" ? "active" : ""} onClick={() => setConversationFilter("saved")}>Saved</button>
-          <button className={conversationFilter === "archived" ? "active" : ""} onClick={() => setConversationFilter("archived")}>Archived</button>
+          <button aria-pressed={conversationFilter === "all"} className={conversationFilter === "all" ? "active" : ""} onClick={() => setConversationFilter("all")}>All <span>{chats.length}</span></button>
+          <button aria-pressed={conversationFilter === "unread"} className={conversationFilter === "unread" ? "active" : ""} onClick={() => setConversationFilter("unread")}>Unread <span>{chats.filter((chat) => Boolean(chat.unread)).length}</span></button>
+          <button aria-pressed={conversationFilter === "groups"} className={conversationFilter === "groups" ? "active" : ""} onClick={() => setConversationFilter("groups")}>Groups</button>
+          <button aria-pressed={conversationFilter === "saved"} className={conversationFilter === "saved" ? "active" : ""} onClick={() => setConversationFilter("saved")}>Saved</button>
+          <button aria-pressed={conversationFilter === "archived"} className={conversationFilter === "archived" ? "active" : ""} onClick={() => setConversationFilter("archived")}>Archived</button>
         </nav>
 
         <div className="conversation-list">
@@ -871,6 +871,7 @@ export function ChatApp() {
           ) : visibleChats.map((chat) => (
             <button
               key={chat.id}
+              aria-current={chat.id === activeId ? "page" : undefined}
               className={`conversation ${chat.id === activeId ? "active" : ""}`}
               onClick={() => selectChat(chat.id)}
             >
@@ -1054,8 +1055,8 @@ export function ChatApp() {
           <h2>{activeChat.name}</h2>
           <p className="info-status">{activeChat.online ? "online" : "last seen recently"}</p>
           <div className="quick-actions">
-            <button onClick={() => updateChatPreference("muted")}><span>{activeChat.muted ? "♪" : "♩"}</span>{activeChat.muted ? "Unmute" : "Mute"}</button>
-            <button onClick={() => updateChatPreference("pinned")}><span>◆</span>{activeChat.pinned ? "Unpin" : "Pin"}</button>
+            <button aria-pressed={Boolean(activeChat.muted)} onClick={() => updateChatPreference("muted")}><span>{activeChat.muted ? "♪" : "♩"}</span>{activeChat.muted ? "Unmute" : "Mute"}</button>
+            <button aria-pressed={Boolean(activeChat.pinned)} onClick={() => updateChatPreference("pinned")}><span>◆</span>{activeChat.pinned ? "Unpin" : "Pin"}</button>
             <button onClick={() => flash("Secure call started")}><span>♢</span>Call</button>
             <button onClick={openChatSearch}><span>⌕</span>Search</button>
           </div>
