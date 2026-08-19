@@ -20,6 +20,7 @@ The 0.2 release marks the first complete private-chat MVP: durable conversations
 - Fast in-conversation message search with keyboard support
 - Discoverable keyboard shortcut guide for search and panel navigation
 - Per-conversation drafts kept locally on the device
+- User-initiated local JSON conversation exports with an explicit decryption notice
 - Encrypted message replies with restored quote context
 - Encrypted message editing and synchronized deletion markers
 - Copyable message text with clear clipboard feedback

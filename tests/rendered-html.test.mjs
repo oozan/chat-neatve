@@ -119,6 +119,9 @@ test("persists device preferences and applies real conversation filters", async 
   assert.match(client, /event\.key === "\/"/);
   assert.match(client, /Scroll to latest message/);
   assert.match(client, /userAwayFromBottomRef/);
+  assert.match(client, /Export conversation/);
+  assert.match(client, /application\/json/);
+  assert.match(client, /URL\.createObjectURL/);
 });
 
 test("adds baseline browser security headers", async () => {

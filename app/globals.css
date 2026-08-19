@@ -160,6 +160,7 @@ button { color: inherit; }
 .privacy-footer button { margin-left: 8px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--muted); font-size: 9px; cursor: pointer; }
 .archive-chat-action { width: 100%; margin: 12px 0; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font-weight: 700; cursor: pointer; }
 .archive-chat-action:hover { border-color: var(--green); color: var(--green-deep); }
+.export-chat-action { margin-top: 0; }
 .preference-actions { display: grid; gap: 7px; margin: 12px 0; }
 .preference-actions button { display: flex; justify-content: space-between; padding: 10px 11px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--muted); font-size: 10px; cursor: pointer; }
 .preference-actions strong { color: var(--green); }

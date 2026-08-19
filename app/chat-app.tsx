@@ -821,6 +821,23 @@ export function ChatApp() {
     });
   }
 
+  function exportConversation() {
+    const exportData = {
+      conversation: activeChat.name,
+      exportedAt: new Date().toISOString(),
+      encryptionNotice: "Decrypted locally by the account owner for this export.",
+      messages: activeChat.messages.map(({ id, text, time, mine, replyTo, reactions, edited, deleted, gifUrl }) => ({ id, text, time, mine: Boolean(mine), replyTo, reactions, edited: Boolean(edited), deleted: Boolean(deleted), gifUrl })),
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `whisper-${activeChat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "conversation"}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    flash("Conversation exported on this device");
+  }
+
   return (
     <main className={`app-shell theme-${theme} ${compactMode ? "compact-mode" : ""} ${reducedMotion ? "reduce-motion" : ""}`}>
       <section className={`sidebar ${mobileChatOpen ? "sidebar-hidden-mobile" : ""}`} aria-label="Conversation list">
@@ -1048,6 +1065,7 @@ export function ChatApp() {
             <button onClick={() => flash("Safety number copied")}>View safety number</button>
           </div>
           <button className="archive-chat-action" onClick={() => updateChatPreference("archived")}>{activeChat.archived ? "Restore conversation" : "Archive conversation"}</button>
+          <button className="archive-chat-action export-chat-action" onClick={exportConversation}>Export conversation</button>
           <div className="preference-actions">
             <button aria-pressed={compactMode} onClick={toggleCompactMode}><span>Density</span><strong>{compactMode ? "Compact" : "Comfortable"}</strong></button>
             <button aria-pressed={reducedMotion} onClick={toggleReducedMotion}><span>Motion</span><strong>{reducedMotion ? "Reduced" : "Full"}</strong></button>
