@@ -121,8 +121,9 @@ button { color: inherit; }
 .search-wrap input::placeholder { color: #9aa29f; }
 .search-wrap kbd { padding: 2px 6px; border: 1px solid #dfe4e1; border-radius: 5px; background: #fff; font-size: 10px; }
 
-.filter-tabs { display: flex; gap: 5px; padding: 0 18px 12px; border-bottom: 1px solid var(--line); }
-.filter-tabs button { border: 0; border-radius: 9px; padding: 7px 11px; background: transparent; color: #7c8582; font-size: 12px; font-weight: 700; cursor: pointer; }
+.filter-tabs { display: flex; gap: 4px; padding: 0 12px 12px; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.filter-tabs::-webkit-scrollbar { display: none; }
+.filter-tabs button { flex: 0 0 auto; border: 0; border-radius: 9px; padding: 7px 9px; background: transparent; color: #7c8582; font-size: 12px; font-weight: 700; cursor: pointer; }
 .filter-tabs button.active { background: var(--green-soft); color: var(--green-deep); }
 .filter-tabs span { display: inline-grid; min-width: 18px; margin-left: 3px; place-items: center; border-radius: 8px; background: var(--green); color: #fff; font-size: 10px; }
 

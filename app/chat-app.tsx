@@ -247,7 +247,7 @@ export function ChatApp() {
   const [chats, setChats] = useState(initialChats);
   const [activeId, setActiveId] = useState("maya");
   const [query, setQuery] = useState("");
-  const [conversationFilter, setConversationFilter] = useState<"all" | "groups" | "saved">("all");
+  const [conversationFilter, setConversationFilter] = useState<"all" | "unread" | "groups" | "saved">("all");
   const [draft, setDraft] = useState("");
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [pickerTab, setPickerTab] = useState<"emoji" | "gif">("emoji");
@@ -278,7 +278,7 @@ export function ChatApp() {
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
   const visibleChats = useMemo(
     () => chats
-      .filter((chat) => conversationFilter === "all" || (conversationFilter === "groups" ? chat.kind === "group" : chat.kind === "saved"))
+      .filter((chat) => conversationFilter === "all" || (conversationFilter === "unread" ? Boolean(chat.unread) : conversationFilter === "groups" ? chat.kind === "group" : chat.kind === "saved"))
       .filter((chat) => chat.name.toLowerCase().includes(query.toLowerCase()))
       .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))),
     [chats, conversationFilter, query],
@@ -773,13 +773,14 @@ export function ChatApp() {
 
         <nav className="filter-tabs" aria-label="Conversation filters">
           <button className={conversationFilter === "all" ? "active" : ""} onClick={() => setConversationFilter("all")}>All <span>{chats.length}</span></button>
+          <button className={conversationFilter === "unread" ? "active" : ""} onClick={() => setConversationFilter("unread")}>Unread <span>{chats.filter((chat) => Boolean(chat.unread)).length}</span></button>
           <button className={conversationFilter === "groups" ? "active" : ""} onClick={() => setConversationFilter("groups")}>Groups</button>
           <button className={conversationFilter === "saved" ? "active" : ""} onClick={() => setConversationFilter("saved")}>Saved</button>
         </nav>
 
         <div className="conversation-list">
           {visibleChats.length === 0 ? (
-            <div className="empty-list">{query ? `No conversations match “${query}”.` : conversationFilter === "groups" ? "No group conversations yet." : "No saved conversations yet."}</div>
+            <div className="empty-list">{query ? `No conversations match “${query}”.` : conversationFilter === "unread" ? "You are all caught up." : conversationFilter === "groups" ? "No group conversations yet." : "No saved conversations yet."}</div>
           ) : visibleChats.map((chat) => (
             <button
               key={chat.id}
