@@ -17,6 +17,7 @@ The 0.2 release marks the first complete private-chat MVP: durable conversations
 - Per-conversation drafts kept locally on the device
 - Encrypted message replies with restored quote context
 - Encrypted message editing and synchronized deletion markers
+- Copyable message text with clear clipboard feedback
 - Working unread/group/saved/archive filters plus device-persisted pin, mute, and archive preferences
 - Optimistic sending with delivered, read, and failed states
 - AES-256-GCM encryption in the browser before network transmission

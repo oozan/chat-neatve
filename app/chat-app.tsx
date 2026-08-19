@@ -740,6 +740,16 @@ export function ChatApp() {
     });
   }
 
+  async function copyMessage(message: Message) {
+    try {
+      await navigator.clipboard.writeText(message.text);
+      setMessageMenuTarget(null);
+      flash("Message copied");
+    } catch {
+      flash("Could not copy this message");
+    }
+  }
+
   function updateChatPreference(preference: "pinned" | "muted" | "archived") {
     const nextValue = !activeChat[preference];
     const nextPreferences = {
@@ -886,12 +896,15 @@ export function ChatApp() {
                   </span>
                   {!message.deleted && <button className="add-reaction" aria-label="React to message" onClick={() => setReactionTarget(reactionTarget === message.id ? null : message.id)}>☺</button>}
                   {!message.deleted && <button className="reply-message" aria-label="Reply to message" onClick={() => { setReplyingTo({ id: message.id, text: message.text }); setReactionTarget(null); }}>↩</button>}
-                  {message.mine && activeChat.persisted && typeof message.id === "string" && !message.id.startsWith("local-") && !message.deleted && (
+                  {!message.deleted && (
                     <>
                       <button className="message-more" aria-label="Message options" onClick={() => setMessageMenuTarget(messageMenuTarget === message.id ? null : message.id)}>•••</button>
                       {messageMenuTarget === message.id && <div className="message-action-menu">
-                        {!message.gif && !message.gifUrl && <button onClick={() => startEditingMessage(message)}>Edit message</button>}
-                        <button className="danger" onClick={() => { setDeleteTarget(message); setMessageMenuTarget(null); }}>Delete message</button>
+                        <button onClick={() => void copyMessage(message)}>Copy message</button>
+                        {message.mine && activeChat.persisted && typeof message.id === "string" && !message.id.startsWith("local-") && <>
+                          {!message.gif && !message.gifUrl && <button onClick={() => startEditingMessage(message)}>Edit message</button>}
+                          <button className="danger" onClick={() => { setDeleteTarget(message); setMessageMenuTarget(null); }}>Delete message</button>
+                        </>}
                       </div>}
                     </>
                   )}

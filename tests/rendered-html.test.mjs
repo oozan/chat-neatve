@@ -107,6 +107,8 @@ test("persists device preferences and applies real conversation filters", async 
   assert.match(client, /updateChatPreference\("muted"\)/);
   assert.match(client, /updateChatPreference\("archived"\)/);
   assert.match(client, /Conversation restored/);
+  assert.match(client, /navigator\.clipboard\.writeText\(message\.text\)/);
+  assert.match(client, /Copy message/);
 });
 
 test("adds baseline browser security headers", async () => {
