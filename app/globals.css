@@ -366,6 +366,7 @@ button { color: inherit; }
 .compact-mode .messages { gap: 4px; padding-block: 12px 20px; }
 .compact-mode .bubble { padding: 7px 11px 5px; }
 .compact-mode .bubble p { font-size: 12px; }
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 
 @media (max-width: 1120px) {
   .sidebar { flex-basis: 340px; }

@@ -274,6 +274,7 @@ export function ChatApp() {
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [compactMode, setCompactMode] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const chatSearchRef = useRef<HTMLInputElement>(null);
   const messageSpaceRef = useRef<HTMLDivElement>(null);
@@ -330,6 +331,7 @@ export function ChatApp() {
       if (stored) setDraft(stored);
       if (localStorage.getItem("whisper-theme") === "dark") setTheme("dark");
       setCompactMode(localStorage.getItem("whisper-density") === "compact");
+      setReducedMotion(localStorage.getItem("whisper-reduced-motion") === "true");
       setChats((current) => current.map(withChatPreferences));
     }, 0);
     return () => window.clearTimeout(timer);
@@ -786,8 +788,15 @@ export function ChatApp() {
     });
   }
 
+  function toggleReducedMotion() {
+    setReducedMotion((current) => {
+      localStorage.setItem("whisper-reduced-motion", String(!current));
+      return !current;
+    });
+  }
+
   return (
-    <main className={`app-shell theme-${theme} ${compactMode ? "compact-mode" : ""}`}>
+    <main className={`app-shell theme-${theme} ${compactMode ? "compact-mode" : ""} ${reducedMotion ? "reduce-motion" : ""}`}>
       <section className={`sidebar ${mobileChatOpen ? "sidebar-hidden-mobile" : ""}`} aria-label="Conversation list">
         <header className="sidebar-header">
           <button className="avatar avatar-me" aria-label="Open profile" onClick={() => flash("Profile settings are ready for the next step")}>OZ</button>
@@ -1014,6 +1023,7 @@ export function ChatApp() {
           <button className="archive-chat-action" onClick={() => updateChatPreference("archived")}>{activeChat.archived ? "Restore conversation" : "Archive conversation"}</button>
           <div className="preference-actions">
             <button aria-pressed={compactMode} onClick={toggleCompactMode}><span>Density</span><strong>{compactMode ? "Compact" : "Comfortable"}</strong></button>
+            <button aria-pressed={reducedMotion} onClick={toggleReducedMotion}><span>Motion</span><strong>{reducedMotion ? "Reduced" : "Full"}</strong></button>
           </div>
           <div className="media-row"><strong>Shared media</strong><button onClick={() => flash("All shared media")}>View all</button></div>
           <div className="media-grid"><span>Lisbon</span><span>Notes</span><span>4 files</span></div>
