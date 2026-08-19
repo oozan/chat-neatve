@@ -272,6 +272,7 @@ export function ChatApp() {
   const [messageMenuTarget, setMessageMenuTarget] = useState<Message["id"] | null>(null);
   const [editingMessage, setEditingMessage] = useState<{ id: Message["id"]; originalText: string; previousDraft: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const searchRef = useRef<HTMLInputElement>(null);
   const chatSearchRef = useRef<HTMLInputElement>(null);
   const messageSpaceRef = useRef<HTMLDivElement>(null);
@@ -326,6 +327,7 @@ export function ChatApp() {
     const timer = window.setTimeout(() => {
       const stored = localStorage.getItem(`whisper-draft:${initialChats[0].id}`);
       if (stored) setDraft(stored);
+      if (localStorage.getItem("whisper-theme") === "dark") setTheme("dark");
       setChats((current) => current.map(withChatPreferences));
     }, 0);
     return () => window.clearTimeout(timer);
@@ -767,8 +769,16 @@ export function ChatApp() {
     window.setTimeout(() => setNotice(null), 2200);
   }
 
+  function toggleTheme() {
+    setTheme((current) => {
+      const next = current === "light" ? "dark" : "light";
+      localStorage.setItem("whisper-theme", next);
+      return next;
+    });
+  }
+
   return (
-    <main className="app-shell">
+    <main className={`app-shell theme-${theme}`}>
       <section className={`sidebar ${mobileChatOpen ? "sidebar-hidden-mobile" : ""}`} aria-label="Conversation list">
         <header className="sidebar-header">
           <button className="avatar avatar-me" aria-label="Open profile" onClick={() => flash("Profile settings are ready for the next step")}>OZ</button>
@@ -776,6 +786,7 @@ export function ChatApp() {
             <strong>Whisper</strong>
             <span><i className={`status-dot status-${syncState}`} /> {syncState === "online" ? "encrypted · synced" : syncState === "syncing" ? "connecting securely…" : "offline · messages queued"}</span>
           </div>
+          <button className="icon-button theme-toggle" aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`} onClick={toggleTheme}>{theme === "light" ? "☾" : "☀"}</button>
           <button className="icon-button new-chat" aria-label="Start new chat" onClick={() => setShowNewChat(true)}>＋</button>
         </header>
 

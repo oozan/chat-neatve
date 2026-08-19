@@ -104,6 +104,7 @@ button { color: inherit; }
 .icon-button.active { background: var(--green-soft); color: var(--green); }
 .new-chat { background: var(--green); color: #fff; font-size: 25px; }
 .new-chat:hover { background: var(--green-deep); color: #fff; }
+.theme-toggle { margin-right: 4px; }
 
 .search-wrap {
   display: flex;
@@ -340,6 +341,21 @@ button { color: inherit; }
 .modal-icon.danger-icon { background: #f8e8e5; color: #b75348; font-weight: 900; }
 .modal-actions button.danger-action { background: #b75348; color: #fff; }
 .modal-actions button:disabled { cursor: not-allowed; opacity: .45; }
+
+.theme-dark { --ink: #e8f0ed; --muted: #96a6a0; --line: #31433d; --paper: #16221e; --cream: #101a17; --green-soft: #173f35; }
+.theme-dark .sidebar, .theme-dark .sidebar-header, .theme-dark .chat-header, .theme-dark .privacy-footer, .theme-dark .info-panel, .theme-dark .chat-search-panel, .theme-dark .media-picker, .theme-dark .new-chat-modal { background: #182520; }
+.theme-dark .chat-panel, .theme-dark .message-space { background-color: #101a17; }
+.theme-dark .message-space { background-image: radial-gradient(circle at 20% 20%, rgba(73,177,147,.06) 0 1.5px, transparent 1.5px), radial-gradient(circle at 80% 65%, rgba(73,177,147,.04) 0 2px, transparent 2px); }
+.theme-dark .message-space::before { background: linear-gradient(180deg, rgba(5,12,10,.12), transparent 18%, transparent 80%, rgba(5,12,10,.35)); }
+.theme-dark .conversation:hover, .theme-dark .icon-button:hover { background: #22332d; }
+.theme-dark .conversation.active { background: #1c3b32; }
+.theme-dark .search-wrap, .theme-dark .chat-search-field, .theme-dark .composer, .theme-dark .info-card, .theme-dark .new-chat-modal input { border-color: #354840; background: #202f2a; }
+.theme-dark .bubble, .theme-dark .quick-actions button, .theme-dark .archive-chat-action, .theme-dark .message-action-menu, .theme-dark .reaction-picker { background: #22322c; }
+.theme-dark .mine .bubble { background: #19483a; }
+.theme-dark .bubble p, .theme-dark .chat-search-results strong, .theme-dark .new-chat-modal label { color: #e2ebe8; }
+.theme-dark .composer-zone, .theme-dark .encryption-banner { background: rgba(20,32,28,.97); }
+.theme-dark .search-wrap kbd, .theme-dark .emoji-categories button.active { border-color: #3a4c46; background: #283832; }
+.theme-dark .emoji-categories, .theme-dark .gif-search { background: #202f2a; }
 
 @media (max-width: 1120px) {
   .sidebar { flex-basis: 340px; }
