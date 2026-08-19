@@ -275,6 +275,7 @@ export function ChatApp() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [compactMode, setCompactMode] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const chatSearchRef = useRef<HTMLInputElement>(null);
   const messageSpaceRef = useRef<HTMLDivElement>(null);
@@ -307,6 +308,10 @@ export function ChatApp() {
         setShowChatSearch(true);
         window.setTimeout(() => chatSearchRef.current?.focus(), 0);
       }
+      if ((event.metaKey || event.ctrlKey) && event.key === "/") {
+        event.preventDefault();
+        setShowShortcutHelp((current) => !current);
+      }
       if (event.key === "Escape") {
         setShowNewChat(false);
         setShowMediaPicker(false);
@@ -315,6 +320,7 @@ export function ChatApp() {
         setReplyingTo(null);
         setMessageMenuTarget(null);
         setDeleteTarget(null);
+        setShowShortcutHelp(false);
         if (editingMessage) {
           setDraft(editingMessage.previousDraft);
           setEditingMessage(null);
@@ -847,7 +853,7 @@ export function ChatApp() {
           ))}
         </div>
 
-        <footer className="privacy-footer"><span>⌁</span> End-to-end encrypted</footer>
+        <footer className="privacy-footer"><span>⌁</span> End-to-end encrypted <button onClick={() => setShowShortcutHelp(true)} aria-label="Show keyboard shortcuts">⌘ /</button></footer>
       </section>
 
       <section className={`chat-panel ${mobileChatOpen ? "chat-open-mobile" : ""}`} aria-label={`Chat with ${activeChat.name}`}>
@@ -1058,6 +1064,22 @@ export function ChatApp() {
             <div className="modal-actions">
               <button type="button" onClick={() => setDeleteTarget(null)}>Cancel</button>
               <button className="danger-action" type="button" onClick={() => deleteMessage(deleteTarget)}>Delete message</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showShortcutHelp && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowShortcutHelp(false)}>
+          <section className="new-chat-modal shortcut-modal" role="dialog" aria-modal="true" aria-labelledby="shortcut-title">
+            <button className="modal-close" onClick={() => setShowShortcutHelp(false)} aria-label="Close keyboard shortcuts">×</button>
+            <span className="modal-icon">⌨</span>
+            <h2 id="shortcut-title">Keyboard shortcuts</h2>
+            <div className="shortcut-list">
+              <div><span>Search conversations</span><kbd>⌘ K</kbd></div>
+              <div><span>Search this chat</span><kbd>⌘ F</kbd></div>
+              <div><span>Show shortcuts</span><kbd>⌘ /</kbd></div>
+              <div><span>Close panels</span><kbd>Esc</kbd></div>
             </div>
           </section>
         </div>
