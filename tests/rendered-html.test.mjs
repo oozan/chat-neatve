@@ -127,6 +127,15 @@ test("persists device preferences and applies real conversation filters", async 
   assert.match(client, /aria-live="polite"/);
 });
 
+test("pins messages locally without storing decrypted message content", async () => {
+  const client = await readFile(new URL("../app/chat-app.tsx", import.meta.url), "utf8");
+
+  assert.match(client, /whisper-pinned-message:/);
+  assert.match(client, /localStorage\.setItem\(storageKey, messageId\)/);
+  assert.match(client, /Pinned message/);
+  assert.match(client, /Unpin message/);
+});
+
 test("adds baseline browser security headers", async () => {
   const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
   assert.match(worker, /x-content-type-options/);

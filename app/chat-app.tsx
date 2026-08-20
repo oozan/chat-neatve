@@ -277,6 +277,7 @@ export function ChatApp() {
   const [reducedMotion, setReducedMotion] = useState(false);
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showScrollLatest, setShowScrollLatest] = useState(false);
+  const [pinnedMessageId, setPinnedMessageId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const chatSearchRef = useRef<HTMLInputElement>(null);
   const messageSpaceRef = useRef<HTMLDivElement>(null);
@@ -284,6 +285,7 @@ export function ChatApp() {
   const userAwayFromBottomRef = useRef(false);
 
   const activeChat = chats.find((chat) => chat.id === activeId) ?? chats[0];
+  const pinnedMessage = activeChat.messages.find((message) => String(message.id) === pinnedMessageId && !message.deleted);
   const visibleChats = useMemo(
     () => chats
       .filter((chat) => conversationFilter === "archived" ? Boolean(chat.archived) : !chat.archived)
@@ -344,6 +346,11 @@ export function ChatApp() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setPinnedMessageId(localStorage.getItem(`whisper-pinned-message:${activeId}`)), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -782,6 +789,21 @@ export function ChatApp() {
     }
   }
 
+  function togglePinnedMessage(message: Message) {
+    const messageId = String(message.id);
+    const storageKey = `whisper-pinned-message:${activeChat.id}`;
+    if (pinnedMessageId === messageId) {
+      localStorage.removeItem(storageKey);
+      setPinnedMessageId(null);
+      flash("Message unpinned");
+    } else {
+      localStorage.setItem(storageKey, messageId);
+      setPinnedMessageId(messageId);
+      flash("Message pinned");
+    }
+    setMessageMenuTarget(null);
+  }
+
   function updateChatPreference(preference: "pinned" | "muted" | "archived") {
     const nextValue = !activeChat[preference];
     const nextPreferences = {
@@ -931,6 +953,16 @@ export function ChatApp() {
           </div>
         )}
 
+        {pinnedMessage && (
+          <div className="pinned-message-banner" aria-label="Pinned message">
+            <button className="pinned-message-jump" onClick={() => focusMessage(pinnedMessage.id)}>
+              <span aria-hidden="true">◆</span>
+              <span><strong>Pinned message</strong><small>{pinnedMessage.text || "GIF"}</small></span>
+            </button>
+            <button className="pinned-message-close" onClick={() => togglePinnedMessage(pinnedMessage)} aria-label="Unpin message">×</button>
+          </div>
+        )}
+
         <div className="encryption-banner">
           <span>⌁</span>
           <p><strong>Messages are end-to-end encrypted.</strong> No one outside this chat can read them.</p>
@@ -974,6 +1006,7 @@ export function ChatApp() {
                       <button className="message-more" aria-label="Message options" onClick={() => setMessageMenuTarget(messageMenuTarget === message.id ? null : message.id)}>•••</button>
                       {messageMenuTarget === message.id && <div className="message-action-menu">
                         <button onClick={() => void copyMessage(message)}>Copy message</button>
+                        <button onClick={() => togglePinnedMessage(message)}>{pinnedMessageId === String(message.id) ? "Unpin message" : "Pin message"}</button>
                         {message.mine && activeChat.persisted && typeof message.id === "string" && !message.id.startsWith("local-") && <>
                           {!message.gif && !message.gifUrl && <button onClick={() => startEditingMessage(message)}>Edit message</button>}
                           <button className="danger" onClick={() => { setDeleteTarget(message); setMessageMenuTarget(null); }}>Delete message</button>
