@@ -27,6 +27,7 @@ The 0.3 release turns the private-chat MVP into a more complete daily-use experi
 - Copyable message text with clear clipboard feedback
 - Device-local pinned messages with a jump-to-message banner
 - Working unread/group/saved/archive filters plus device-persisted pin, mute, and archive preferences
+- Device-persisted “mark as unread” reminders that clear when a chat is reopened
 - Optimistic sending with delivered, read, and failed states
 - AES-256-GCM encryption in the browser before network transmission
 - Non-exportable conversation keys stored in IndexedDB on the device

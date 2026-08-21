@@ -178,12 +178,13 @@ function withChatPreferences(chat: Chat): Chat {
   try {
     const stored = localStorage.getItem(`whisper-chat-preferences:${chat.id}`);
     if (!stored) return chat;
-    const preferences = JSON.parse(stored) as { pinned?: unknown; muted?: unknown; archived?: unknown };
+    const preferences = JSON.parse(stored) as { pinned?: unknown; muted?: unknown; archived?: unknown; unread?: unknown };
     return {
       ...chat,
       pinned: typeof preferences.pinned === "boolean" ? preferences.pinned : chat.pinned,
       muted: typeof preferences.muted === "boolean" ? preferences.muted : chat.muted,
       archived: typeof preferences.archived === "boolean" ? preferences.archived : chat.archived,
+      unread: typeof preferences.unread === "number" && preferences.unread >= 0 ? preferences.unread : chat.unread,
     };
   } catch {
     return chat;
@@ -519,6 +520,8 @@ export function ChatApp() {
 
   function selectChat(id: string) {
     const nextDraft = localStorage.getItem(`whisper-draft:${id}`) ?? "";
+    const selectedChat = chats.find((chat) => chat.id === id);
+    if (selectedChat) persistChatPreferences(selectedChat, { unread: 0 });
     setActiveId(id);
     setDraft(nextDraft);
     setMobileChatOpen(true);
@@ -804,16 +807,30 @@ export function ChatApp() {
     setMessageMenuTarget(null);
   }
 
+  function persistChatPreferences(chat: Chat, overrides: Partial<Pick<Chat, "pinned" | "muted" | "archived" | "unread">>) {
+    localStorage.setItem(`whisper-chat-preferences:${chat.id}`, JSON.stringify({
+      pinned: overrides.pinned ?? Boolean(chat.pinned),
+      muted: overrides.muted ?? Boolean(chat.muted),
+      archived: overrides.archived ?? Boolean(chat.archived),
+      unread: overrides.unread ?? chat.unread ?? 0,
+    }));
+  }
+
   function updateChatPreference(preference: "pinned" | "muted" | "archived") {
     const nextValue = !activeChat[preference];
-    const nextPreferences = {
-      pinned: preference === "pinned" ? nextValue : Boolean(activeChat.pinned),
-      muted: preference === "muted" ? nextValue : Boolean(activeChat.muted),
-      archived: preference === "archived" ? nextValue : Boolean(activeChat.archived),
-    };
     setChats((current) => current.map((chat) => chat.id === activeChat.id ? { ...chat, [preference]: nextValue } : chat));
-    localStorage.setItem(`whisper-chat-preferences:${activeChat.id}`, JSON.stringify(nextPreferences));
+    persistChatPreferences(activeChat, { [preference]: nextValue });
     flash(preference === "pinned" ? (nextValue ? "Conversation pinned" : "Conversation unpinned") : preference === "muted" ? (nextValue ? "Notifications muted" : "Notifications enabled") : (nextValue ? "Conversation archived" : "Conversation restored"));
+  }
+
+  function markConversationUnread() {
+    const unread = Math.max(activeChat.unread ?? 0, 1);
+    persistChatPreferences(activeChat, { unread });
+    setChats((current) => current.map((chat) => chat.id === activeChat.id ? { ...chat, unread } : chat));
+    setShowInfo(false);
+    setMobileChatOpen(false);
+    setConversationFilter("unread");
+    flash("Conversation marked as unread");
   }
 
   function flash(message: string) {
@@ -1101,6 +1118,7 @@ export function ChatApp() {
           <button className="archive-chat-action" onClick={() => updateChatPreference("archived")}>{activeChat.archived ? "Restore conversation" : "Archive conversation"}</button>
           <button className="archive-chat-action export-chat-action" onClick={exportConversation}>Export conversation</button>
           <div className="preference-actions">
+            <button onClick={markConversationUnread}><span>Conversation</span><strong>Mark unread</strong></button>
             <button aria-pressed={compactMode} onClick={toggleCompactMode}><span>Density</span><strong>{compactMode ? "Compact" : "Comfortable"}</strong></button>
             <button aria-pressed={reducedMotion} onClick={toggleReducedMotion}><span>Motion</span><strong>{reducedMotion ? "Reduced" : "Full"}</strong></button>
           </div>

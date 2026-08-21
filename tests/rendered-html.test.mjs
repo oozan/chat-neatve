@@ -107,6 +107,9 @@ test("persists device preferences and applies real conversation filters", async 
   assert.match(client, /updateChatPreference\("muted"\)/);
   assert.match(client, /updateChatPreference\("archived"\)/);
   assert.match(client, /Conversation restored/);
+  assert.match(client, /persistChatPreferences\(activeChat, \{ unread \}\)/);
+  assert.match(client, /Conversation marked as unread/);
+  assert.match(client, /preferences\.unread/);
   assert.match(client, /navigator\.clipboard\.writeText\(message\.text\)/);
   assert.match(client, /Copy message/);
   assert.match(client, /whisper-theme/);
