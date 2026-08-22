@@ -23,6 +23,7 @@ The 0.3 release turns the private-chat MVP into a more complete daily-use experi
 - Per-conversation drafts kept locally on the device
 - User-initiated local JSON conversation exports with an explicit decryption notice
 - Encrypted message replies with restored quote context
+- Clickable reply quotes that jump to their encrypted target message
 - Encrypted message editing and synchronized deletion markers
 - Copyable message text with clear clipboard feedback
 - Device-local pinned messages with a jump-to-message banner

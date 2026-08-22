@@ -14,6 +14,7 @@ type Message = {
   mine?: boolean;
   status?: "read" | "sent" | "failed";
   replyTo?: string;
+  replyToId?: string;
   reactions?: string[];
   edited?: boolean;
   deleted?: boolean;
@@ -30,7 +31,7 @@ type OnlineGif = {
 };
 
 type DecodedStoredContent =
-  | { recordType: "message"; text: string; gif?: string; gifUrl?: string; gifPreviewUrl?: string; replyTo?: string }
+  | { recordType: "message"; text: string; gif?: string; gifUrl?: string; gifPreviewUrl?: string; replyTo?: string; replyToId?: string }
   | { recordType: "reaction"; targetId: string; emoji: string; active: boolean }
   | { recordType: "edit"; targetId: string; text: string }
   | { recordType: "delete"; targetId: string };
@@ -222,9 +223,9 @@ function decodeStoredMessage(value: string): DecodedStoredContent {
   }
   if (value.startsWith("[message]")) {
     try {
-      const data = JSON.parse(value.slice(9)) as { text?: unknown; replyTo?: unknown };
+      const data = JSON.parse(value.slice(9)) as { text?: unknown; replyTo?: unknown; replyToId?: unknown };
       if (typeof data.text === "string" && typeof data.replyTo === "string") {
-        return { recordType: "message", text: data.text, replyTo: data.replyTo };
+        return { recordType: "message", text: data.text, replyTo: data.replyTo, replyToId: typeof data.replyToId === "string" ? data.replyToId : undefined };
       }
     } catch {
       return { recordType: "message", text: "Encrypted message" };
@@ -459,6 +460,7 @@ export function ChatApp() {
               gifUrl: record.content.gifUrl,
               gifPreviewUrl: record.content.gifPreviewUrl,
               replyTo: record.content.replyTo,
+              replyToId: record.content.replyToId,
               time: new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(record.createdAt)),
               mine: record.mine,
               status: record.mine ? "read" : undefined,
@@ -473,7 +475,7 @@ export function ChatApp() {
                 return message.deleted ? message : { ...message, text: record.content.text, edited: true };
               }
               if (record.content.recordType === "delete") {
-                return { ...message, text: "", gif: undefined, gifUrl: undefined, gifPreviewUrl: undefined, replyTo: undefined, reactions: [], deleted: true };
+                return { ...message, text: "", gif: undefined, gifUrl: undefined, gifPreviewUrl: undefined, replyTo: undefined, replyToId: undefined, reactions: [], deleted: true };
               }
               const reactions = message.reactions ?? [];
               return {
@@ -567,7 +569,7 @@ export function ChatApp() {
       const storedContent = message.gifUrl
         ? `[online-gif]${JSON.stringify({ id: message.gif?.replace(/^tenor-/, ""), label: message.text, url: message.gifUrl, previewUrl: message.gifPreviewUrl ?? message.gifUrl })}`
         : message.gif ? `[gif:${message.gif}] ${message.text}`
-          : message.replyTo ? `[message]${JSON.stringify({ text: message.text, replyTo: message.replyTo })}`
+          : message.replyTo ? `[message]${JSON.stringify({ text: message.text, replyTo: message.replyTo, replyToId: message.replyToId })}`
             : message.text;
       const encrypted = await encryptMessage(secureChat.id, storedContent);
       const response = await fetch("/api/messages", {
@@ -664,6 +666,7 @@ export function ChatApp() {
       mine: true,
       status: "sent",
       replyTo: replyingTo?.text,
+      replyToId: replyingTo ? String(replyingTo.id) : undefined,
     };
 
     setChats((current) =>
@@ -770,7 +773,7 @@ export function ChatApp() {
     setChats((current) => current.map((chat) => chat.id === activeChat.id ? {
       ...chat,
       messages: chat.messages.map((entry) => entry.id === message.id
-        ? { ...entry, text: "", gif: undefined, gifUrl: undefined, gifPreviewUrl: undefined, replyTo: undefined, reactions: [], deleted: true }
+        ? { ...entry, text: "", gif: undefined, gifUrl: undefined, gifPreviewUrl: undefined, replyTo: undefined, replyToId: undefined, reactions: [], deleted: true }
         : entry),
     } : chat));
     void persistEncryptedControl(activeChat, `[delete]${JSON.stringify({ targetId: message.id })}`).catch(() => {
@@ -865,7 +868,7 @@ export function ChatApp() {
       conversation: activeChat.name,
       exportedAt: new Date().toISOString(),
       encryptionNotice: "Decrypted locally by the account owner for this export.",
-      messages: activeChat.messages.map(({ id, text, time, mine, replyTo, reactions, edited, deleted, gifUrl }) => ({ id, text, time, mine: Boolean(mine), replyTo, reactions, edited: Boolean(edited), deleted: Boolean(deleted), gifUrl })),
+      messages: activeChat.messages.map(({ id, text, time, mine, replyTo, replyToId, reactions, edited, deleted, gifUrl }) => ({ id, text, time, mine: Boolean(mine), replyTo, replyToId, reactions, edited: Boolean(edited), deleted: Boolean(deleted), gifUrl })),
     };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -997,7 +1000,9 @@ export function ChatApp() {
                 {!message.mine && <span className={`mini-avatar avatar-${activeChat.color}`}>{activeChat.initials}</span>}
                 <div className="bubble">
                   {message.deleted ? <p className="deleted-message">Message deleted</p> : <>
-                  {message.replyTo && <div className="reply-quote">{message.replyTo}</div>}
+                  {message.replyTo && (message.replyToId
+                    ? <button className="reply-quote" onClick={() => focusMessage(message.replyToId!)} aria-label="Jump to replied message">{message.replyTo}</button>
+                    : <div className="reply-quote">{message.replyTo}</div>)}
                   {message.gifUrl ? (
                     <div className="online-gif-message">
                       <Image src={message.gifUrl} alt={message.text} width={640} height={480} unoptimized />

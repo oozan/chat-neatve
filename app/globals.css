@@ -228,7 +228,9 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(14,124,102,.
 .message-meta b { color: var(--green); letter-spacing: -2px; }
 .message-meta b.failed { color: #bc5145; letter-spacing: 0; }
 .retry-message { width: 17px; height: 17px; padding: 0; border: 0; border-radius: 50%; background: #bc5145; color: #fff; font-size: 10px; font-weight: 900; cursor: pointer; }
-.reply-quote { margin: 0 0 7px; padding: 5px 8px; border-left: 3px solid var(--green); border-radius: 4px; background: rgba(15,124,102,.06); color: #59716a; font-size: 10px; }
+.reply-quote { display: block; width: 100%; margin: 0 0 7px; padding: 5px 8px; overflow: hidden; border: 0; border-left: 3px solid var(--green); border-radius: 4px; background: rgba(15,124,102,.06); color: #59716a; font-size: 10px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+button.reply-quote { cursor: pointer; }
+button.reply-quote:hover { background: rgba(15,124,102,.12); color: var(--green-deep); }
 .add-reaction { position: absolute; top: 50%; right: -36px; display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: rgba(255,255,255,.95); box-shadow: 0 3px 12px rgba(30,48,42,.1); color: #73807b; cursor: pointer; opacity: 0; transform: translateY(-50%) scale(.8); transition: .15s ease; }
 .mine .add-reaction { right: auto; left: -36px; }
 .reply-message { position: absolute; top: 50%; right: -68px; display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: rgba(255,255,255,.95); box-shadow: 0 3px 12px rgba(30,48,42,.1); color: #73807b; cursor: pointer; opacity: 0; transform: translateY(-50%) scale(.8); transition: .15s ease; }

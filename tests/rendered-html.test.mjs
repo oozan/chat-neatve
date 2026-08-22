@@ -79,6 +79,8 @@ test("stores reply context inside encrypted message content", async () => {
   ]);
 
   assert.match(client, /\[message\].*replyTo/);
+  assert.match(client, /replyToId: replyingTo \? String\(replyingTo\.id\)/);
+  assert.match(client, /Jump to replied message/);
   assert.match(client, /encryptMessage\(secureChat\.id, storedContent\)/);
   assert.doesNotMatch(route, /replyTo/);
 });
